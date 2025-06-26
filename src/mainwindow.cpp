@@ -122,6 +122,9 @@ void MainWindow::on_pushButton_clicked()
         if(cipherList[0][0] == "ChaCha20") cipherList[0][0] = "ChaCha20Poly1305";
     }
 
+    //Reverse list if encrypting
+    if(encryptToggle == "Encrypt") std::reverse(cipherList.begin(), cipherList.end());
+
     //Setup new thread, signals and slots.
 
     Crypto* worker = new Crypto;

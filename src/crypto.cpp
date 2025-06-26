@@ -106,14 +106,11 @@ void Crypto::encrypt()
 
     std::string combined;
     std::string_view algo;
-    if(encryptToggle == "Encrypt") {
-        algo = cipherList[cipherList.size()-1][0];
-        mode = cipherList[cipherList.size()-1][1];
-    }
-    if(encryptToggle == "Decrypt"){
-        algo = cipherList[0][0];
-        mode = cipherList[0][1];
-    }
+
+    algo = cipherList[0][0];
+    mode = cipherList[0][1];
+
+
     if(algo != "ChaCha20Poly1305" && algo != "ChaCha20") {
         combined = algo + "/" + mode;
     }
@@ -128,10 +125,10 @@ void Crypto::encrypt()
             enc = Botan::Cipher_Mode::create_or_throw(combined, Botan::Cipher_Dir::Encryption);
         }
         catch (Botan::Exception e){
+            cipherList.clear();
             QString errormsg = QString(e.what());
             emit sendMessage(errormsg);
             emit finished();
-            cipherList.clear();
             return;
         }
        if(algo == "ChaCha20Poly1305" || algo == "ChaCha20") {
@@ -314,8 +311,7 @@ void Crypto::encrypt()
     fout.close();
 
     //Crypto operations complete. Removing item from list.
-    if(encryptToggle == "Encrypt") cipherList.erase(cipherList.end() - 1);
-    if(encryptToggle == "Decrypt") cipherList.erase(cipherList.begin());
+    cipherList.erase(cipherList.begin());
     emit sendMessage("Round complete" + QString::fromStdString(" ") + QString::fromStdString(combined));
     inputFile = outputFile;
     outputFile = "temp" + std::to_string(initialCipherListSize - cipherList.size());
