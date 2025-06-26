@@ -5,4 +5,6 @@ Instructions:
 2. Open .pro file in Qt Creator
 3. Compile
 
+You may need to adjust the path to the Botan files in the .pro files.
+
 To install Qt on Windows using the installer, you need a Qt account. If you do not want to create a Qt account, you will need to build Qt from source. This is relatively more involved. 
