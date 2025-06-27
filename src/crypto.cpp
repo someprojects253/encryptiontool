@@ -3,14 +3,13 @@
 Crypto::Crypto(QObject *parent) : QObject(parent) {}
 
 void Crypto::setParams(const QString& input, const QString& output, const QString& password, const QString& mode,
-                       const QString& cipher, const QString& encryptToggle, std::vector<std::vector<std::string>> cipherList,
+                        const QString& encryptToggle, std::vector<std::vector<std::string>> cipherList,
                         size_t memcost, size_t timecost, size_t threads, QString argon2)
 {
     this->inputFile = input.toStdString();
     this->outputFile = output.toStdString();
     this->password = password.toStdString();
     this->mode = mode.toStdString();
-    this->cipher = cipher.toStdString(); // unused
     this->encryptToggle = encryptToggle.toStdString();
     this->cipherList = cipherList;
 
@@ -68,11 +67,9 @@ void Crypto::deriveKey(const std::vector<uint8_t>& salt, size_t keysize)
 {
     const std::string_view pbkdf_algo = argon2;
 
-    // Argon2 parameters: memory, iterations, parallelism
     size_t M = memcost;      // memory
     size_t t = timecost;     // number of iterations
     size_t p = threads;     // threads
-
 
     auto pbkdf = Botan::PasswordHashFamily::create_or_throw(pbkdf_algo)->from_params(M, t, p);
 
@@ -98,7 +95,6 @@ void Crypto::encrypt()
 
     auto iv = rng.random_vec<std::vector<uint8_t>>(16);
     auto salt = rng.random_vec<std::vector<uint8_t>>(32);
-    // Botan::secure_vector<uint8_t> key;
     Botan::secure_vector<uint8_t> cipher_key;
     Botan::secure_vector<uint8_t> mac_key;
     std::vector<uint8_t> hash_output;
@@ -116,9 +112,15 @@ void Crypto::encrypt()
     }
     if(algo == "ChaCha20Poly1305" || algo == "ChaCha20") combined = algo;
 
-
+    //Resize IVs
     //Overview: IV size default 16. 64 for Threefish-512, 32 for SHACAL2.
     //IV size remains same for all modes except: OCB (must be 15) and CCM (must be 12 or less)
+    if(algo == "ChaCha20Poly1305" || algo == "ChaCha20") iv.resize(24);
+    if(mode == "OCB") iv.resize(15);
+    if(algo == "SHACAL2" && mode == "CBC/PKCS7") iv.resize(32);
+    if(algo == "Threefish-512" && mode == "CBC/PKCS7") iv.resize(64);
+    if(mode == "CCM") iv.resize(12);
+
     if(encryptToggle == "Encrypt")
     {
         try{
@@ -131,45 +133,17 @@ void Crypto::encrypt()
             emit finished();
             return;
         }
-       if(algo == "ChaCha20Poly1305" || algo == "ChaCha20") {
-           iv.resize(24);
-           iv = rng.random_vec<std::vector<uint8_t>>(24);
-       }
-       if(mode == "OCB")
-       {
-           iv.resize(15);
-           iv = rng.random_vec<std::vector<uint8_t>>(15);
-       }
-       if(algo == "SHACAL2" && mode == "CBC/PKCS7")
-       {
-           iv.resize(32);
-           iv = rng.random_vec<std::vector<uint8_t>>(32);
-       }
-       if(algo == "Threefish-512" && mode == "CBC/PKCS7")
-       {
-           iv.resize(64);
-           iv = rng.random_vec<std::vector<uint8_t>>(64);
-       }
-       if(mode == "CCM")
-       {
-           iv.resize(12);
-           iv = rng.random_vec<std::vector<uint8_t>>(12);
-       }
-       fout.write(reinterpret_cast<const char*>(iv.data()), iv.size());
-       fout.write(reinterpret_cast<const char*>(salt.data()), salt.size());
+
+        iv = rng.random_vec<std::vector<uint8_t>>(iv.size());
+        fout.write(reinterpret_cast<const char*>(iv.data()), iv.size());
+        fout.write(reinterpret_cast<const char*>(salt.data()), salt.size());
     }
 
     else if(encryptToggle == "Decrypt")
     {
-        if(algo == "ChaCha20Poly1305" || algo == "ChaCha20") iv.resize(24);
-        if(mode == "OCB") iv.resize(15);
-        if(algo == "SHACAL2" && mode == "CBC/PKCS7") iv.resize(32);
-        if(algo == "Threefish-512" && mode == "CBC/PKCS7") iv.resize(64);
-        if(mode == "CCM") iv.resize(12);
-
         fin.read(reinterpret_cast<char*>(buffer.data()), iv.size()+salt.size());
         std::copy(buffer.begin(), buffer.begin() + iv.size(), iv.begin());
-        std::copy(buffer.begin()+iv.size(), buffer.begin() + +iv.size()+ salt.size(), salt.begin());
+        std::copy(buffer.begin()+iv.size(), buffer.begin() + iv.size()+ salt.size(), salt.begin());
 
         try{
 

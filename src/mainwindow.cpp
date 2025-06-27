@@ -6,6 +6,7 @@
 #include <QTextStream>
 #include <QByteArray>
 #include <QDebug>
+#include <QIntValidator>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -13,6 +14,21 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
     ui->comboBox_MAC->hide();
+    ui->pushButton->setDisabled(true);
+
+    ui->lineEdit_memcost->setValidator(new QIntValidator(ui->lineEdit_memcost));
+    ui->lineEdit_timecost->setValidator(new QIntValidator(ui->lineEdit_timecost));
+    ui->lineEdit_threads->setValidator(new QIntValidator(ui->lineEdit_threads));
+
+    // Start button enable conditions
+    connect(ui->lineEdit_Password, &QLineEdit::textChanged, this, &MainWindow::updateButtonState);
+    connect(ui->lineEdit_confirm, &QLineEdit::textChanged, this, &MainWindow::updateButtonState);
+    connect(ui->lineEdit_inputFile, &QLineEdit::textChanged, this, &MainWindow::updateButtonState);
+    connect(ui->lineEdit_outputFile, &QLineEdit::textChanged, this, &MainWindow::updateButtonState);
+    connect(ui->comboBox_EncryptDecrypt, &QComboBox::currentIndexChanged, this, &MainWindow::updateButtonState);
+    connect(ui->checkBox_chainToggle, &QCheckBox::checkStateChanged, this, &MainWindow::updateButtonState);
+    connect(ui->pushButton_Add, &QPushButton::clicked, this, &MainWindow::updateButtonState);
+    connect(ui->pushButton_Remove, &QPushButton::clicked, this, &MainWindow::updateButtonState);
 }
 
 MainWindow::~MainWindow()
@@ -117,7 +133,6 @@ void MainWindow::on_pushButton_clicked()
             if(cipherList[i][0] == "XChaCha20") cipherList[i][0] = "ChaCha20";
             if(cipherList[i][1] == "CBC") cipherList[i][1] = "CBC/PKCS7";
             if(cipherList[i][1] == "CTR") cipherList[i][1] = "CTR-BE";
-
         }
         if(cipherList[0][0] == "ChaCha20") cipherList[0][0] = "ChaCha20Poly1305";
     }
@@ -137,7 +152,6 @@ void MainWindow::on_pushButton_clicked()
         ui->lineEdit_outputFile->text(),
         ui->lineEdit_Password->text(),
         mode,
-        algorithm,
         encryptToggle,
         cipherList,
         memcost,
@@ -191,9 +205,11 @@ void MainWindow::on_pushButton_clicked()
 void MainWindow::on_checkBox_checkStateChanged(const Qt::CheckState &arg1)
 {
     if (arg1 == Qt::Checked) {
-        ui->lineEdit_Password->setEchoMode(QLineEdit::Normal);  // Show password
+        ui->lineEdit_Password->setEchoMode(QLineEdit::Normal);
+        ui->lineEdit_confirm->setEchoMode(QLineEdit::Normal);        // Show password
     } else {
-        ui->lineEdit_Password->setEchoMode(QLineEdit::Password);  // Hide password
+        ui->lineEdit_Password->setEchoMode(QLineEdit::Password);
+        ui->lineEdit_confirm->setEchoMode(QLineEdit::Password);        // Hide password
     }
 }
 
@@ -213,12 +229,52 @@ void MainWindow::on_lineEdit_Password_textEdited(const QString &arg1)
 
 void MainWindow::on_comboBox_EncryptDecrypt_currentIndexChanged(int index)
 {
+    if(index == 1){
+        ui->label_confirm->setVisible(false);
+        ui->lineEdit_confirm->setVisible(false);
+    }
+    else {
+        ui->label_confirm->setVisible(true);
+        ui->lineEdit_confirm->setVisible(true);
+    }
+
 }
 
 void MainWindow::on_comboBox_cipherMode_currentTextChanged(const QString &arg1)
 {
 }
 
+void MainWindow::updateButtonState()
+{
+    QString encryptToggle = ui->comboBox_EncryptDecrypt->currentText();
+    bool isChain = ui->checkBox_chainToggle->isChecked();
+    bool buttonActive;
+
+    bool linesFull = !ui->lineEdit_Password->text().trimmed().isEmpty() &&
+                     !ui->lineEdit_inputFile->text().trimmed().isEmpty() &&
+                     !ui->lineEdit_outputFile->text().trimmed().isEmpty() &&
+                     !ui->lineEdit_memcost->text().trimmed().isEmpty() &&
+                     !ui->lineEdit_timecost->text().trimmed().isEmpty() &&
+                     !ui->lineEdit_threads->text().trimmed().isEmpty();
+
+    if(encryptToggle == "Encrypt")
+    {
+        if(isChain)
+            buttonActive = (ui->lineEdit_Password->text() == ui->lineEdit_confirm->text()
+                            && linesFull && (cipherList.size() > 0));
+        if(!isChain)
+            buttonActive = (ui->lineEdit_Password->text() == ui->lineEdit_confirm->text() && linesFull);
+    }
+    if(encryptToggle == "Decrypt")
+    {
+        if(isChain)
+            buttonActive = (linesFull && (cipherList.size() > 0));
+        if(!isChain)
+            buttonActive = linesFull;
+    }
+
+    ui->pushButton->setEnabled(buttonActive);
+}
 
 void MainWindow::on_comboBox_Algorithm_currentTextChanged(const QString &arg1)
 {
@@ -282,5 +338,10 @@ void MainWindow::on_checkBox_chainToggle_stateChanged(int arg1)
     ui->pushButton_Add->setEnabled(arg1);
     ui->pushButton_Remove->setEnabled(arg1);
     ui->lineEdit_cipherChain->setEnabled(arg1);
+
+    if(!arg1) {
+        cipherList.clear();
+        ui->lineEdit_cipherChain->setText(""); // verify cipherList is empty
+    }
 }
 
