@@ -180,6 +180,16 @@
             <string>XChaCha20</string>
            </property>
           </item>
+          <item>
+           <property name="text">
+            <string>SM4</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Kuznyechik</string>
+           </property>
+          </item>
          </widget>
         </item>
         <item>

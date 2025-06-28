@@ -39,6 +39,8 @@ public slots:
     std::vector<uint8_t> mac(Botan::secure_vector<uint8_t> key, int iv_and_salt_size);
     void deriveKey(const std::vector<uint8_t>& salt, size_t keysize);
 
+    void setKeySizes();
+
 signals:
     void finished();
     void progress(int percent);
@@ -53,16 +55,18 @@ private:
     std::string encryptToggle;
     std::string argon2;
     std::string intermediateMode, finalMode;
-    size_t iteration, memcost, timecost, threads;
+    size_t memcost, timecost, threads;
     std::vector<std::vector<std::string>> cipherList;
 
     Botan::secure_vector<uint8_t> key;
 
     int initialCipherListSize;
+    int mainKeySize;
 
     std::string initialOutputFile;
 
     std::vector<std::string> cleanupFiles;
+    std::vector<uint8_t> salt;
 };
 
 #endif // CRYPTO_H

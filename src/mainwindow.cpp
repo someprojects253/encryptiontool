@@ -299,7 +299,10 @@ void MainWindow::on_pushButton_Add_clicked()
 
     // Update lineEdit to display current chain
     for(size_t i = 0; i < cipherList.size(); i++){
-        chainText += cipherList[i][0] + "/" + cipherList[i][1] + "(";
+        if(cipherList[i][0] != "XChaCha20")
+            chainText += cipherList[i][0] + "/" + cipherList[i][1] + "(";
+        else
+            chainText += cipherList[i][0] + "(";
         if(i == cipherList.size()-1) {
             for(size_t i2 = 0; i2 <cipherList.size(); i2++) {
                 chainText += ")";

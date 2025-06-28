@@ -24,7 +24,18 @@ void Crypto::setParams(const QString& input, const QString& output, const QStrin
 
     if(cipherList.size() > 1) outputFile = "temp7UXgmUZb";
 
-    iteration = 0;
+    mainKeySize = 0;
+
+    if(encryptToggle == "Encrypt"){
+        Botan::AutoSeeded_RNG rng;
+        salt = rng.random_vec<std::vector<uint8_t>>(32);
+    } else {
+        std::ifstream file(inputFile, std::ios::binary);
+        salt.resize(32);
+        file.seekg(16);
+        file.read(reinterpret_cast<char*>(salt.data()), 32);
+        file.close();
+    }
 }
 
 std::vector<uint8_t> Crypto::mac(Botan::secure_vector<uint8_t> key, int iv_and_salt_size)
@@ -78,6 +89,35 @@ void Crypto::deriveKey(const std::vector<uint8_t>& salt, size_t keysize)
     pbkdf->hash(key, this->password, salt);
 }
 
+void Crypto::setKeySizes()
+{
+    int keysize = 32;
+    std::string algo, mode;
+    for(int i = 0; i < cipherList.size(); i++)
+    {
+        algo = cipherList[i][0];
+        mode = cipherList[i][1];
+        keysize = 32;
+        if(algo == "SHACAL2" || algo == "Threefish-512") keysize = 64;
+
+        if(algo == "SM4") keysize = 16;
+
+        // 32 bytes for HMAC-SHA256 tag
+        // If chaining and encrypting, only need MAC key for last encryption
+        // If chaining and decrypting, only need MAC key for last decryption
+        if((mode == "CBC/PKCS7" || mode == "CTR-BE")){
+            if(encryptToggle == "Encrypt" && i == initialCipherListSize-1)
+                keysize += 32;
+            if(encryptToggle == "Decrypt" && i == 0)
+                keysize += 32;
+        }
+
+        if(mode == "SIV") keysize += 32;
+        cipherList[i].push_back(std::to_string(keysize));
+        mainKeySize += keysize;
+    }
+}
+
 void Crypto::encrypt()
 {
     //Renaming files for cascade
@@ -94,11 +134,10 @@ void Crypto::encrypt()
     Botan::AutoSeeded_RNG rng;
 
     auto iv = rng.random_vec<std::vector<uint8_t>>(16);
-    auto salt = rng.random_vec<std::vector<uint8_t>>(32);
     Botan::secure_vector<uint8_t> cipher_key;
     Botan::secure_vector<uint8_t> mac_key;
     std::vector<uint8_t> hash_output;
-    size_t keysize;
+
 
     std::string combined;
     std::string_view algo;
@@ -111,6 +150,17 @@ void Crypto::encrypt()
         combined = algo + "/" + mode;
     }
     if(algo == "ChaCha20Poly1305" || algo == "ChaCha20") combined = algo;
+
+    size_t keysize = std::stoi(cipherList[0][2]);
+    Botan::secure_vector<uint8_t> subkey;
+
+    if(encryptToggle == "Encrypt") {
+        subkey.assign(key.begin(), key.begin() + keysize);
+        key.erase(key.begin(), key.begin() + keysize);
+    } else { // Decrypt
+        subkey.assign(key.end() - keysize, key.end());
+        key.resize(key.size() - keysize);
+    }
 
     //Resize IVs
     //Overview: IV size default 16. 64 for Threefish-512, 32 for SHACAL2.
@@ -136,7 +186,8 @@ void Crypto::encrypt()
 
         iv = rng.random_vec<std::vector<uint8_t>>(iv.size());
         fout.write(reinterpret_cast<const char*>(iv.data()), iv.size());
-        fout.write(reinterpret_cast<const char*>(salt.data()), salt.size());
+        if(cipherList.size() == 1)
+            fout.write(reinterpret_cast<const char*>(salt.data()), salt.size());
     }
 
     else if(encryptToggle == "Decrypt")
@@ -146,7 +197,6 @@ void Crypto::encrypt()
         std::copy(buffer.begin()+iv.size(), buffer.begin() + iv.size()+ salt.size(), salt.begin());
 
         try{
-
             enc = Botan::Cipher_Mode::create_or_throw(combined, Botan::Cipher_Dir::Decryption);
         }
         catch (Botan::Exception e){
@@ -158,29 +208,9 @@ void Crypto::encrypt()
         }
     }
 
-    //Adjust key size for algorithm
-    keysize = 32;
-    if(algo == "SHACAL2" || algo == "Threefish-512") {
-        keysize = 64;
-    }
-
-    if((mode == "CBC/PKCS7" || mode == "CTR-BE")){
-        if(encryptToggle == "Encrypt" && cipherList.size() == 1)
-            keysize += 32;
-        if(encryptToggle == "Decrypt" && cipherList.size() == initialCipherListSize)
-            keysize += 32;
-    }
-
-    if(mode == "SIV") keysize += 32;
-
-
-    //Derive key and split if needed
-    // if(cipherList.size() == initialCipherListSize) // Implement key reuse logic later
-    deriveKey(salt, keysize);
-
     if(mode != "CBC/PKCS7" && mode != "CTR-BE") {
         cipher_key.resize(keysize);
-        std::copy(key.begin(), key.begin()+keysize, cipher_key.begin());
+        std::copy(subkey.begin(), subkey.begin()+keysize, cipher_key.begin());
     }
 
     //Split key into cipher and MAC keys if needed
@@ -188,11 +218,11 @@ void Crypto::encrypt()
         if((encryptToggle == "Encrypt" && cipherList.size() == 1) || (encryptToggle == "Decrypt" && cipherList.size() == initialCipherListSize)) {
             cipher_key.resize(keysize-32);
             mac_key.resize(32);
-            std::copy(key.begin(), key.begin()+keysize-32, cipher_key.begin());
-            std::copy(key.begin()+keysize-32, key.end(), mac_key.begin());
+            std::copy(subkey.begin(), subkey.begin()+keysize-32, cipher_key.begin());
+            std::copy(subkey.begin()+keysize-32, subkey.end(), mac_key.begin());
         } else{
             cipher_key.resize(keysize);
-            std::copy(key.begin(), key.begin()+keysize, cipher_key.begin());
+            std::copy(subkey.begin(), subkey.begin()+keysize, cipher_key.begin());
         }
     }
 
@@ -253,8 +283,12 @@ void Crypto::encrypt()
                 if((mode == "CBC/PKCS7" || mode == "CTR-BE") && encryptToggle == "Decrypt" && cipherList.size() == initialCipherListSize)
                     chunk.resize((chunk.size() - 32)); // 32 is hmac sha256 size
                 enc->finish(chunk);
+                fout.write(reinterpret_cast<const char*>(chunk.data()), chunk.size());
             }
-            else enc->update(chunk);
+            else {
+                enc->update(chunk);
+                if(mode != "SIV") fout.write(reinterpret_cast<const char*>(chunk.data()), chunk.size());
+            }
 
         } catch(Botan::Exception e) {
             QString errormsg = QString(e.what());
@@ -263,8 +297,6 @@ void Crypto::encrypt()
             cipherList.clear();
             return;
         }
-
-        fout.write(reinterpret_cast<const char*>(chunk.data()), chunk.size());
 
         //Updating progress bar
         int percent = static_cast<int>((100.0 * totalBytesRead) / fileSize);
@@ -285,6 +317,7 @@ void Crypto::encrypt()
     fout.close();
 
     //Crypto operations complete. Removing item from list.
+    if(encryptToggle == "Decrypt" && cipherList.size() == initialCipherListSize) salt.resize(0);
     cipherList.erase(cipherList.begin());
     emit sendMessage("Round complete" + QString::fromStdString(" ") + QString::fromStdString(combined));
     inputFile = outputFile;
@@ -293,6 +326,15 @@ void Crypto::encrypt()
 
 void Crypto::cipherLoop()
 {
+    setKeySizes();
+    try {
+        deriveKey(salt, mainKeySize);
+    } catch (const std::exception& e) {
+        emit sendMessage(QString("Key derivation failed: ") + e.what());
+        emit finished();
+        return;
+    }
+
     for(int i = 0; i < initialCipherListSize; i++){
         encrypt();
     }
