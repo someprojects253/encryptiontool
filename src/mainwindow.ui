@@ -233,12 +233,12 @@
          <widget class="QComboBox" name="comboBox_Argon2">
           <item>
            <property name="text">
-            <string>Argon2d</string>
+            <string>Argon2id</string>
            </property>
           </item>
           <item>
            <property name="text">
-            <string>Argon2id</string>
+            <string>Argon2d</string>
            </property>
           </item>
           <item>
