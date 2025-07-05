@@ -26,13 +26,15 @@ void Crypto::setParams(const QString& input, const QString& output, const QStrin
 
     mainKeySize = 0;
 
+    std::string algo = cipherList[0][0];
+    std::string algomode = cipherList[0][1];
+
     if(encryptToggle == "Encrypt"){
         Botan::AutoSeeded_RNG rng;
         salt = rng.random_vec<std::vector<uint8_t>>(32);
     } else {
         std::ifstream file(inputFile, std::ios::binary);
         salt.resize(32);
-        file.seekg(16);
         file.read(reinterpret_cast<char*>(salt.data()), 32);
         file.close();
     }
@@ -40,6 +42,7 @@ void Crypto::setParams(const QString& input, const QString& output, const QStrin
 
 std::vector<uint8_t> Crypto::mac(Botan::secure_vector<uint8_t> key, int iv_and_salt_size)
 {
+    emit sendMessage("Computing MAC");
     std::string file_to_mac;
     if(encryptToggle == "Encrypt") file_to_mac = outputFile;
     else file_to_mac = inputFile;
@@ -76,17 +79,26 @@ std::vector<uint8_t> Crypto::mac(Botan::secure_vector<uint8_t> key, int iv_and_s
 
 void Crypto::deriveKey(const std::vector<uint8_t>& salt, size_t keysize)
 {
-    const std::string_view pbkdf_algo = argon2;
+    emit sendMessage("Deriving key");
 
-    size_t M = memcost;      // memory
-    size_t t = timecost;     // number of iterations
-    size_t p = threads;     // threads
-
-    auto pbkdf = Botan::PasswordHashFamily::create_or_throw(pbkdf_algo)->from_params(M, t, p);
+    uint32_t M = static_cast<uint32_t>(memcost);   // Memory in KiB
+    uint32_t t = static_cast<uint32_t>(timecost);  // Iterations
+    uint32_t p = static_cast<uint32_t>(threads);   // Parallelism
 
     key.resize(keysize);
 
-    pbkdf->hash(key, this->password, salt);
+    const void* pwd_data = this->password.data();
+    size_t pwd_len = this->password.size();
+
+    int result;
+    //time, memory, threads, password, password length, salt, salt length, output buffer, output length
+    if(argon2 == "Argon2id")  result = argon2id_hash_raw(t, M, p, pwd_data, pwd_len, salt.data(), salt.size(), key.data(), key.size());
+    if(argon2 == "Argon2d")  result = argon2d_hash_raw(t, M, p, pwd_data, pwd_len, salt.data(), salt.size(), key.data(), key.size());
+    if(argon2 == "Argon2i")  result = argon2i_hash_raw(t, M, p, pwd_data, pwd_len, salt.data(), salt.size(), key.data(), key.size());
+
+    if (result != ARGON2_OK) {
+        throw std::runtime_error(std::string("Argon2 error: ") + argon2_error_message(result));
+    }
 }
 
 void Crypto::setKeySizes()
@@ -133,7 +145,7 @@ void Crypto::encrypt()
     std::unique_ptr<Botan::Cipher_Mode> enc;
     Botan::AutoSeeded_RNG rng;
 
-    auto iv = rng.random_vec<std::vector<uint8_t>>(16);
+    // auto iv = rng.random_vec<std::vector<uint8_t>>(16);
     Botan::secure_vector<uint8_t> cipher_key;
     Botan::secure_vector<uint8_t> mac_key;
     std::vector<uint8_t> hash_output;
@@ -163,13 +175,13 @@ void Crypto::encrypt()
     }
 
     //Resize IVs
-    //Overview: IV size default 16. 64 for Threefish-512, 32 for SHACAL2.
-    //IV size remains same for all modes except: OCB (must be 15) and CCM (must be 12 or less)
+    //Overview: IV size default 16. 64 for Threefish-512, 32 for SHACAL2. 24 for XChaCha20
+    iv.resize(16);
     if(algo == "ChaCha20Poly1305" || algo == "ChaCha20") iv.resize(24);
+    if(algo == "SHACAL2") iv.resize(32);
+    if(algo == "Threefish-512") iv.resize(64);
+    if(mode == "GCM") iv.resize(12);
     if(mode == "OCB") iv.resize(15);
-    if(algo == "SHACAL2" && mode == "CBC/PKCS7") iv.resize(32);
-    if(algo == "Threefish-512" && mode == "CBC/PKCS7") iv.resize(64);
-    if(mode == "CCM") iv.resize(12);
 
     if(encryptToggle == "Encrypt")
     {
@@ -184,17 +196,22 @@ void Crypto::encrypt()
             return;
         }
 
-        iv = rng.random_vec<std::vector<uint8_t>>(iv.size());
-        fout.write(reinterpret_cast<const char*>(iv.data()), iv.size());
         if(cipherList.size() == 1)
             fout.write(reinterpret_cast<const char*>(salt.data()), salt.size());
+
+        if(mode != "SIV") {
+        iv = rng.random_vec<std::vector<uint8_t>>(iv.size());
+        fout.write(reinterpret_cast<const char*>(iv.data()), iv.size());
+        }
+        // std::string saltstr = Botan::hex_encode(salt);
+        // emit sendMessage(QString::fromStdString(saltstr));
     }
 
     else if(encryptToggle == "Decrypt")
     {
         fin.read(reinterpret_cast<char*>(buffer.data()), iv.size()+salt.size());
-        std::copy(buffer.begin(), buffer.begin() + iv.size(), iv.begin());
-        std::copy(buffer.begin()+iv.size(), buffer.begin() + iv.size()+ salt.size(), salt.begin());
+        std::copy(buffer.begin(), buffer.begin() + salt.size(), salt.begin());
+        if(mode != "SIV") std::copy(buffer.begin() + salt.size(), buffer.begin() + salt.size() + iv.size(), iv.begin());
 
         try{
             enc = Botan::Cipher_Mode::create_or_throw(combined, Botan::Cipher_Dir::Decryption);
@@ -227,17 +244,6 @@ void Crypto::encrypt()
     }
 
 
-    //Setup
-    try{
-    enc->set_key(cipher_key);
-    enc->start(iv);
-    }catch(Botan::Exception e) {
-        QString errormsg = QString(e.what());
-        emit sendMessage(errormsg);
-        emit finished();
-        cipherList.clear();
-        return;
-    }
 
     //Verify MAC before decrypting if applicable
     if(encryptToggle == "Decrypt" && (mode == "CBC/PKCS7" || mode == "CTR-BE") && cipherList.size() == initialCipherListSize) {
@@ -255,7 +261,35 @@ void Crypto::encrypt()
         fin.seekg(iv.size() + salt.size(), std::ios::beg);
 
         if(mactag == hash_output) emit sendMessage("Authentication successful");
-        else emit sendMessage("Authentication failed.");
+        else {
+                emit sendMessage("Authentication failed. Stopping operations.");
+                cipherList.clear();
+                return;
+            }
+    }
+
+    //Setup
+    try{
+        enc->set_key(cipher_key);
+
+        if(encryptToggle == "Encrypt"){
+            if(mode != "SIV") enc->start(iv);
+            else enc->start();
+        }
+        if(encryptToggle == "Decrypt") {
+            if(mode == "SIV")
+            {
+                fin.seekg(salt.size(), std::ios::beg);
+                enc->start();
+            } else enc->start(iv);
+
+        }
+    }catch(Botan::Exception e) {
+        QString errormsg = QString(e.what());
+        emit sendMessage(errormsg);
+        emit finished();
+        cipherList.clear();
+        return;
     }
 
 
@@ -276,6 +310,8 @@ void Crypto::encrypt()
         bool isLastChunk = fin.eof();
 
         std::vector<uint8_t> chunk(buffer.begin(), buffer.begin() + bytesRead);
+        // std::string bufferstr = Botan::hex_encode(chunk);
+        // emit sendMessage (QString::fromStdString(bufferstr));
 
         try{
             if (isLastChunk) {

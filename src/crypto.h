@@ -21,6 +21,8 @@
 #include <stdio.h>
 #include <iostream>
 
+#include <argon2.h>
+
 
 class Crypto : public QObject
 {
@@ -67,6 +69,7 @@ private:
 
     std::vector<std::string> cleanupFiles;
     std::vector<uint8_t> salt;
+    std::vector<uint8_t> iv;
 };
 
 #endif // CRYPTO_H

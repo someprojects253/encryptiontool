@@ -29,6 +29,17 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->checkBox_chainToggle, &QCheckBox::checkStateChanged, this, &MainWindow::updateButtonState);
     connect(ui->pushButton_Add, &QPushButton::clicked, this, &MainWindow::updateButtonState);
     connect(ui->pushButton_Remove, &QPushButton::clicked, this, &MainWindow::updateButtonState);
+
+    connect(ui->comboBox_Algorithm, &QComboBox::currentIndexChanged, this, [this]{
+        QString cipher = ui->comboBox_Algorithm->currentText();
+        if(cipher == "SHACAL2" || cipher == "Threefish-512"){
+            ui->comboBox_cipherMode->setItemData(2, false, Qt::UserRole -1);
+         ui->comboBox_cipherMode->setItemData(3, false, Qt::UserRole -1);
+        } else {
+            ui->comboBox_cipherMode->setItemData(2, QVariant(), Qt::UserRole -1);
+            ui->comboBox_cipherMode->setItemData(3, QVariant(), Qt::UserRole -1);
+        }
+    });
 }
 
 MainWindow::~MainWindow()
@@ -120,22 +131,22 @@ void MainWindow::on_pushButton_clicked()
 
 
     //Change cipher labels for Botan functions. Add cipher + mode to cipherList
-    if(algorithm == "AES") algorithm.replace("AES","AES-256");
+    // if(algorithm == "AES") algorithm.replace("AES","AES-256");
     if(algorithm == "XChaCha20") { algorithm.replace("XChaCha20", "ChaCha20Poly1305"); mode = "";}
 
     if(!ui->checkBox_chainToggle->isChecked())
         cipherList.push_back({algorithm.toStdString(), mode.toStdString()});
 
-    if(ui->checkBox_chainToggle->isChecked()) {
-        for(size_t i = 0; i < cipherList.size(); i++) {
-            if(cipherList[i][0] == "AES") cipherList[i][0] = "AES-256";
-            if(cipherList[i][0] == "Camellia") cipherList[i][0] = "Camellia-256";
-            if(cipherList[i][0] == "XChaCha20") cipherList[i][0] = "ChaCha20";
-            if(cipherList[i][1] == "CBC") cipherList[i][1] = "CBC/PKCS7";
-            if(cipherList[i][1] == "CTR") cipherList[i][1] = "CTR-BE";
-        }
-        if(cipherList[0][0] == "ChaCha20") cipherList[0][0] = "ChaCha20Poly1305";
+    // if(ui->checkBox_chainToggle->isChecked()) {
+    for(size_t i = 0; i < cipherList.size(); i++) {
+        if(cipherList[i][0] == "AES") cipherList[i][0] = "AES-256";
+        if(cipherList[i][0] == "Camellia") cipherList[i][0] = "Camellia-256";
+        if(cipherList[i][0] == "XChaCha20") cipherList[i][0] = "ChaCha20";
+        if(cipherList[i][1] == "CBC") cipherList[i][1] = "CBC/PKCS7";
+        if(cipherList[i][1] == "CTR") cipherList[i][1] = "CTR-BE";
     }
+    if(cipherList[0][0] == "ChaCha20") cipherList[0][0] = "ChaCha20Poly1305";
+    // }
 
     //Reverse list if encrypting
     if(encryptToggle == "Encrypt") std::reverse(cipherList.begin(), cipherList.end());
@@ -144,6 +155,17 @@ void MainWindow::on_pushButton_clicked()
 
     Crypto* worker = new Crypto;
     QThread* thread = new QThread;
+
+    QString header = "cryptoheader\n";
+    header += "argon2=" + argon2 +"\n";
+    header += "memcost(KiB)=" + QString::number(memcost) + "\n";
+    header += "timecost=" + QString::number(timecost) + "\n";
+    header += "threads=" + QString::number(threads) + "\n";
+    if(ui->checkBox_chainToggle->isChecked())
+        header += "cipher=" + ui->lineEdit_cipherChain->text() + "\n";
+    else
+        header += "cipher=" + algorithm + "/" + mode + "\n";
+    header += "endheader";
 
 
     // Set the parameters
@@ -177,21 +199,15 @@ void MainWindow::on_pushButton_clicked()
 
     connect(worker, &Crypto::sendMessage, this, [this](QString message){
         ui->textBrowser->append(message);
+        ui->textBrowser->moveCursor(QTextCursor::End);
     });
 
 
     //Show user parameters in text browser
     if(encryptToggle == "Encrypt") {
-        QString message = "Parameters used. If you forget these, you will not be able to decrypt your data. Recommended to store somewhere accessible.\n\nArgon2 version=" + argon2 + "\nMemory (MiB)=" + QString::number(memcost/1024)
-        + "\nPasses="
-            + QString::number(timecost)
-            + "\nThreads=" + QString::number(threads);
-        if(!ui->checkBox_chainToggle->isChecked()){
-            message += "\nChain: no\nCipher=" + QString::fromStdString(cipherList[0][0]) +
-                       "\nMode=" += QString::fromStdString(cipherList[0][1]);
-        } else {
-            message += "\nChain: yes\nChain order: " + ui->lineEdit_cipherChain->text();
-        }
+        QString message = "Parameters used. If you forget these, you will not be able to decrypt your data. "
+                          "Recommended to store somewhere accessible.\n\n";
+        message += header;
         ui->textBrowser->append(message + "\n");
     }
 
@@ -231,17 +247,13 @@ void MainWindow::on_comboBox_EncryptDecrypt_currentIndexChanged(int index)
 {
     if(index == 1){
         ui->label_confirm->setVisible(false);
-        ui->lineEdit_confirm->setVisible(false);
+        ui->lineEdit_confirm->setEnabled(false);
     }
     else {
         ui->label_confirm->setVisible(true);
-        ui->lineEdit_confirm->setVisible(true);
+        ui->lineEdit_confirm->setEnabled(true);
     }
 
-}
-
-void MainWindow::on_comboBox_cipherMode_currentTextChanged(const QString &arg1)
-{
 }
 
 void MainWindow::updateButtonState()
@@ -278,8 +290,8 @@ void MainWindow::updateButtonState()
 
 void MainWindow::on_comboBox_Algorithm_currentTextChanged(const QString &arg1)
 {
-    if(arg1 == "XChaCha20") ui->comboBox_cipherMode->setHidden(true);
-    else ui->comboBox_cipherMode->setHidden(false);
+    if(arg1 == "XChaCha20") ui->comboBox_cipherMode->setEnabled(false);
+    else ui->comboBox_cipherMode->setEnabled(true);
 }
 
 

@@ -36,8 +36,6 @@ private slots:
 
     void on_comboBox_EncryptDecrypt_currentIndexChanged(int index);
 
-    void on_comboBox_cipherMode_currentTextChanged(const QString &arg1);
-
     void on_comboBox_Algorithm_currentTextChanged(const QString &arg1);
 
     void on_pushButton_Add_clicked();

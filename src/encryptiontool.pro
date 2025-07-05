@@ -1,6 +1,6 @@
 QT       += core gui
 
-LIBS += -lbotan-3
+LIBS += -lbotan-3 -largon2
 INCLUDEPATH += /usr/include/botan-3
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
