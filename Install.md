@@ -1,4 +1,4 @@
-Prerequisites: Botan, Qt, Qt Creator
+Prerequisites: Botan, Qt, Qt Creator, largon2
 
 Instructions:
 1. Download zip and extract to folder
