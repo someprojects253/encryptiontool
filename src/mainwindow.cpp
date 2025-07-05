@@ -13,7 +13,6 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-    ui->comboBox_MAC->hide();
     ui->pushButton->setDisabled(true);
 
     ui->lineEdit_memcost->setValidator(new QIntValidator(ui->lineEdit_memcost));
