@@ -1,6 +1,6 @@
 # encryptiontool
 
-Disclaimer: This is a hobby project. Crashes a lot in current state.
+Disclaimer: This is a hobby project. It has not been audited for security issues. If you find any, please let me know!
 
 File encryption tool made with Botan and Qt. Essentially a Qt frontend for some Botan ciphers. 
 
