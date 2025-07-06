@@ -3,8 +3,8 @@
 Crypto::Crypto(QObject *parent) : QObject(parent) {}
 
 void Crypto::setParams(const QString& input, const QString& output, const QString& password, const QString& mode,
-                        const QString& encryptToggle, std::vector<std::vector<std::string>> cipherList,
-                        size_t memcost, size_t timecost, size_t threads, QString argon2)
+                        const QString& encryptToggle, const std::vector<std::vector<std::string>>& cipherList,
+                        size_t memcost, size_t timecost, size_t threads, QString argon2, QString header)
 {
     this->inputFile = input.toStdString();
     this->outputFile = output.toStdString();
@@ -12,6 +12,7 @@ void Crypto::setParams(const QString& input, const QString& output, const QStrin
     this->mode = mode.toStdString();
     this->encryptToggle = encryptToggle.toStdString();
     this->cipherList = cipherList;
+    this->header = header.toStdString();
 
     this->memcost = memcost;
     this->timecost = timecost;
@@ -34,10 +35,12 @@ void Crypto::setParams(const QString& input, const QString& output, const QStrin
         salt = rng.random_vec<std::vector<uint8_t>>(32);
     } else {
         std::ifstream file(inputFile, std::ios::binary);
+        file.seekg(header.size(), std::ios::beg);
         salt.resize(32);
         file.read(reinterpret_cast<char*>(salt.data()), 32);
         file.close();
     }
+
 }
 
 std::vector<uint8_t> Crypto::mac(Botan::secure_vector<uint8_t> key, int iv_and_salt_size)
@@ -145,7 +148,6 @@ void Crypto::encrypt()
     std::unique_ptr<Botan::Cipher_Mode> enc;
     Botan::AutoSeeded_RNG rng;
 
-    // auto iv = rng.random_vec<std::vector<uint8_t>>(16);
     Botan::secure_vector<uint8_t> cipher_key;
     Botan::secure_vector<uint8_t> mac_key;
     std::vector<uint8_t> hash_output;
@@ -154,8 +156,12 @@ void Crypto::encrypt()
     std::string combined;
     std::string_view algo;
 
-    algo = cipherList[0][0];
-    mode = cipherList[0][1];
+    std::cerr << "this->cipherList size: " << this->cipherList.size() << "\n";
+    std::cerr << "cipherList size: " << cipherList.size() << "\n";
+
+    algo = this->cipherList[0][0];
+    mode = this->cipherList[0][1];
+
 
 
     if(algo != "ChaCha20Poly1305" && algo != "ChaCha20") {
@@ -196,10 +202,12 @@ void Crypto::encrypt()
             return;
         }
 
-        if(cipherList.size() == 1)
+        if(cipherList.size() == 1){
+            fout.write(header.c_str(), header.size());
             fout.write(reinterpret_cast<const char*>(salt.data()), salt.size());
+        }
 
-        if(mode != "SIV") {
+       if(mode != "SIV") {
         iv = rng.random_vec<std::vector<uint8_t>>(iv.size());
         fout.write(reinterpret_cast<const char*>(iv.data()), iv.size());
         }
@@ -209,9 +217,13 @@ void Crypto::encrypt()
 
     else if(encryptToggle == "Decrypt")
     {
+        if(cipherList.size() == initialCipherListSize)
+            fin.seekg(header.size(), std::ios::beg);
         fin.read(reinterpret_cast<char*>(buffer.data()), iv.size()+salt.size());
         std::copy(buffer.begin(), buffer.begin() + salt.size(), salt.begin());
-        if(mode != "SIV") std::copy(buffer.begin() + salt.size(), buffer.begin() + salt.size() + iv.size(), iv.begin());
+       if(mode != "SIV")
+            std::copy(buffer.begin() + salt.size(), buffer.begin() + salt.size() + iv.size(), iv.begin());
+
 
         try{
             enc = Botan::Cipher_Mode::create_or_throw(combined, Botan::Cipher_Dir::Decryption);
@@ -245,6 +257,7 @@ void Crypto::encrypt()
 
 
 
+    //Adjust for header probably
     //Verify MAC before decrypting if applicable
     if(encryptToggle == "Decrypt" && (mode == "CBC/PKCS7" || mode == "CTR-BE") && cipherList.size() == initialCipherListSize) {
         fin.seekg(0, std::ios::end);
@@ -279,7 +292,7 @@ void Crypto::encrypt()
         if(encryptToggle == "Decrypt") {
             if(mode == "SIV")
             {
-                fin.seekg(salt.size(), std::ios::beg);
+                fin.seekg(header.size() + salt.size(), std::ios::beg);
                 enc->start();
             } else enc->start(iv);
 
@@ -310,8 +323,6 @@ void Crypto::encrypt()
         bool isLastChunk = fin.eof();
 
         std::vector<uint8_t> chunk(buffer.begin(), buffer.begin() + bytesRead);
-        // std::string bufferstr = Botan::hex_encode(chunk);
-        // emit sendMessage (QString::fromStdString(bufferstr));
 
         try{
             if (isLastChunk) {
@@ -372,7 +383,7 @@ void Crypto::cipherLoop()
     }
 
     for(int i = 0; i < initialCipherListSize; i++){
-        encrypt();
+        if(cipherList.size() > 0) encrypt();
     }
 
     emit sendMessage("Done");

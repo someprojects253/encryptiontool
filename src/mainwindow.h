@@ -7,6 +7,10 @@
 #include <botan/system_rng.h>
 #include <QThread>
 
+#include <fstream>
+#include <stdio.h>
+#include <iostream>
+
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class MainWindow;
@@ -21,6 +25,7 @@ public:
     MainWindow(QWidget *parent = nullptr);
 
     void updateButtonState();
+    void setInputFields();
     ~MainWindow();
 
 private slots:
@@ -46,6 +51,7 @@ private slots:
 
 private:
     Ui::MainWindow *ui;
+    QString header;
     std::vector<std::vector<std::string>> cipherList;
 };
 #endif // MAINWINDOW_H

@@ -32,8 +32,8 @@ public:
     explicit Crypto(QObject *parent = nullptr);
 
     void setParams(const QString& input, const QString& output, const QString& password, const QString& mode,
-                   const QString& encryptToggle, std::vector<std::vector<std::string>> cipherList,
-                    size_t memcost, size_t timecost, size_t threads, QString argon2);
+                   const QString& encryptToggle, const std::vector<std::vector<std::string>>& cipherList,
+                    size_t memcost, size_t timecost, size_t threads, QString argon2, QString header);
 
 public slots:
     void encrypt();
@@ -57,6 +57,7 @@ private:
     std::string encryptToggle;
     std::string argon2;
     std::string intermediateMode, finalMode;
+    std::string header;
     size_t memcost, timecost, threads;
     std::vector<std::vector<std::string>> cipherList;
 
