@@ -108,7 +108,7 @@ void Crypto::setKeySizes()
 {
     int keysize = 32;
     std::string algo, mode;
-    for(int i = 0; i < cipherList.size(); i++)
+    for(size_t i = 0; i < cipherList.size(); i++)
     {
         algo = cipherList[i][0];
         mode = cipherList[i][1];
@@ -191,7 +191,7 @@ void Crypto::encrypt()
         try{
             enc = Botan::Cipher_Mode::create_or_throw(combined, Botan::Cipher_Dir::Encryption);
         }
-        catch (Botan::Exception e){
+        catch (const Botan::Exception& e){
             cipherList.clear();
             QString errormsg = QString(e.what());
             emit sendMessage(errormsg);
@@ -208,8 +208,6 @@ void Crypto::encrypt()
         iv = rng.random_vec<std::vector<uint8_t>>(iv.size());
         fout.write(reinterpret_cast<const char*>(iv.data()), iv.size());
         }
-        // std::string saltstr = Botan::hex_encode(salt);
-        // emit sendMessage(QString::fromStdString(saltstr));
     }
 
     else if(encryptToggle == "Decrypt")
@@ -218,14 +216,13 @@ void Crypto::encrypt()
             fin.seekg(header.size(), std::ios::beg);
         fin.read(reinterpret_cast<char*>(buffer.data()), iv.size()+salt.size());
         std::copy(buffer.begin(), buffer.begin() + salt.size(), salt.begin());
-       if(mode != "SIV")
+        if(mode != "SIV")
             std::copy(buffer.begin() + salt.size(), buffer.begin() + salt.size() + iv.size(), iv.begin());
-
 
         try{
             enc = Botan::Cipher_Mode::create_or_throw(combined, Botan::Cipher_Dir::Decryption);
         }
-        catch (Botan::Exception e){
+        catch (const Botan::Exception& e){
             QString errormsg = QString(e.what());
             emit sendMessage(errormsg);
             emit finished();
@@ -253,8 +250,6 @@ void Crypto::encrypt()
     }
 
 
-
-    //Adjust for header probably
     //Verify MAC before decrypting if applicable
     if(encryptToggle == "Decrypt" && (mode == "CBC/PKCS7" || mode == "CTR-BE") && cipherList.size() == initialCipherListSize) {
         fin.seekg(0, std::ios::end);
@@ -268,7 +263,7 @@ void Crypto::encrypt()
         hash_output = mac(mac_key, iv.size() + salt.size());
         fout.open(outputFile, std::ios::binary);
         fin.open(inputFile, std::ios::binary);
-        fin.seekg(iv.size() + salt.size(), std::ios::beg);
+        fin.seekg(header.size() + iv.size() + salt.size(), std::ios::beg);
 
         if(mactag == hash_output) emit sendMessage("Authentication successful");
         else {
@@ -292,9 +287,8 @@ void Crypto::encrypt()
                 fin.seekg(header.size() + salt.size(), std::ios::beg);
                 enc->start();
             } else enc->start(iv);
-
         }
-    }catch(Botan::Exception e) {
+    }catch(const Botan::Exception& e) {
         QString errormsg = QString(e.what());
         emit sendMessage(errormsg);
         emit finished();
@@ -334,7 +328,7 @@ void Crypto::encrypt()
                 if(mode != "SIV") fout.write(reinterpret_cast<const char*>(chunk.data()), chunk.size());
             }
 
-        } catch(Botan::Exception e) {
+        } catch(const Botan::Exception& e) {
             QString errormsg = QString(e.what());
             emit sendMessage(errormsg);
             emit finished();
@@ -379,7 +373,7 @@ void Crypto::cipherLoop()
         return;
     }
 
-    for(int i = 0; i < initialCipherListSize; i++){
+    for(size_t i = 0; i < initialCipherListSize; i++){
         if(cipherList.size() > 0) encrypt();
     }
 
