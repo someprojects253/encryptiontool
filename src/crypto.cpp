@@ -58,7 +58,7 @@ std::vector<uint8_t> Crypto::mac(Botan::secure_vector<uint8_t> key, int iv_and_s
     auto hmac = Botan::MessageAuthenticationCode::create_or_throw("HMAC(SHA-256)");
     hmac->set_key(key);
 
-    fin.seekg(iv_and_salt_size, std::ios::beg);
+    fin.seekg(iv_and_salt_size + header.size(), std::ios::beg);
     while (true)
     {
         fin.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
@@ -119,7 +119,7 @@ void Crypto::setKeySizes()
 
         // 32 bytes for HMAC-SHA256 tag
         // If chaining and encrypting, only need MAC key for last encryption
-        // If chaining and decrypting, only need MAC key for last decryption
+        // If chaining and decrypting, only need MAC key for first decryption
         if((mode == "CBC/PKCS7" || mode == "CTR-BE")){
             if(encryptToggle == "Encrypt" && i == initialCipherListSize-1)
                 keysize += 32;
@@ -155,9 +155,6 @@ void Crypto::encrypt()
 
     std::string combined;
     std::string_view algo;
-
-    std::cerr << "this->cipherList size: " << this->cipherList.size() << "\n";
-    std::cerr << "cipherList size: " << cipherList.size() << "\n";
 
     algo = this->cipherList[0][0];
     mode = this->cipherList[0][1];
