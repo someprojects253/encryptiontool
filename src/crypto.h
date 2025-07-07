@@ -16,6 +16,7 @@
 #include <botan/pwdhash.h>
 #include <botan/system_rng.h>
 #include <botan/mac.h>
+#include <botan/aead.h>
 
 #include <fstream>
 #include <stdio.h>
@@ -33,7 +34,7 @@ public:
 
     void setParams(const QString& input, const QString& output, const QString& password, const QString& mode,
                    const QString& encryptToggle, const std::vector<std::vector<std::string>>& cipherList,
-                    size_t memcost, size_t timecost, size_t threads, QString argon2, QString header);
+                    size_t memcost, size_t timecost, size_t threads, QString pbkdf, QString header);
 
 public slots:
     void encrypt();
@@ -55,7 +56,7 @@ private:
     std::string mode;
     std::string cipher;
     std::string encryptToggle;
-    std::string argon2;
+    std::string pbkdf;
     std::string intermediateMode, finalMode;
     std::string header;
     size_t memcost, timecost, threads;
@@ -63,7 +64,7 @@ private:
 
     Botan::secure_vector<uint8_t> key;
 
-    int initialCipherListSize;
+    size_t initialCipherListSize;
     int mainKeySize;
 
     std::string initialOutputFile;

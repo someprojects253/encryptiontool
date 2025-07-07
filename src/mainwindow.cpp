@@ -114,14 +114,6 @@ void MainWindow::on_pushButton_inputFile_clicked()
         buffer += ch;
     }
 
-    // Diagnostic log
-    std::cerr << "Read buffer: [" << buffer << "]\n";
-    std::cerr << "Hex: ";
-    for (unsigned char c : buffer) {
-        printf("%02X ", c);
-    }
-    std::cerr << "\n";
-
     if (buffer != start_marker) {
         std::cerr << "Start marker mismatch.\n";
         ui->textBrowser->append("No header found.");
@@ -190,6 +182,7 @@ void MainWindow::setInputFields()
 
     it = headerVars.find("pbkdf");
     if (it != headerVars.end()) {
+        if(it->second.starts_with("PBKDF2")) it->second = "PBKDF2";
         int index = ui->comboBox_Argon2->findText(QString::fromStdString(it->second));
         ui->comboBox_Argon2->setCurrentIndex(index);
     }
@@ -243,8 +236,7 @@ void MainWindow::setInputFields()
             }
         }
     }
-
-
+    updateButtonState();
 }
 
 void MainWindow::on_pushButton_4_clicked()
@@ -270,10 +262,10 @@ void MainWindow::on_pushButton_4_clicked()
 
 void MainWindow::on_pushButton_clicked()
 {
-
     //UI setup
     ui->pushButton->setEnabled(false);
     ui->progressBar->setValue(0);
+    ui->textBrowser->clear();
 
     //Get crypto parameters
     size_t memcost = ui->lineEdit_memcost->text().toInt() * 1024;
@@ -281,7 +273,8 @@ void MainWindow::on_pushButton_clicked()
     size_t threads = ui->lineEdit_threads->text().toInt();
 
     QString mode = ui->comboBox_cipherMode->currentText();
-    QString argon2 = ui->comboBox_Argon2->currentText();
+    QString pbkdf = ui->comboBox_Argon2->currentText();
+    if(pbkdf == "PBKDF2") pbkdf = "PBKDF2(HMAC(SHA-512))";
     if(mode == "CTR") mode = "CTR-BE";
     if(mode == "CBC") mode = "CBC/PKCS7";
     QString algorithm = ui->comboBox_Algorithm->currentText();
@@ -289,7 +282,7 @@ void MainWindow::on_pushButton_clicked()
 
     if (encryptToggle == "Encrypt") {
         header += "cryptoheader\n";
-        header += "pbkdf=" + argon2 + "\n";
+        header += "pbkdf=" + pbkdf + "\n";
         header += "memcost(MiB)=" + QString::number(memcost / 1024) + "\n";
         header += "timecost=" + QString::number(timecost) + "\n";
         header += "threads=" + QString::number(threads) + "\n";
@@ -306,7 +299,6 @@ void MainWindow::on_pushButton_clicked()
         header += "endheader";
     }
 
-
     //Change cipher labels for Botan functions. Add cipher + mode to cipherList
     // if(algorithm == "AES") algorithm.replace("AES","AES-256");
     if(algorithm == "XChaCha20") { algorithm.replace("XChaCha20", "ChaCha20Poly1305"); mode = "";}
@@ -321,7 +313,6 @@ void MainWindow::on_pushButton_clicked()
         if(cipherList[i][0] == "XChaCha20") cipherList[i][0] = "ChaCha20";
         if(cipherList[i][1] == "CBC") cipherList[i][1] = "CBC/PKCS7";
         if(cipherList[i][1] == "CTR") cipherList[i][1] = "CTR-BE";
-        ui->textBrowser->append(QString::fromStdString(cipherList[i][0]));
     }
     if(cipherList[0][0] == "ChaCha20") cipherList[0][0] = "ChaCha20Poly1305";
     // }
@@ -330,11 +321,8 @@ void MainWindow::on_pushButton_clicked()
     if(encryptToggle == "Encrypt") std::reverse(cipherList.begin(), cipherList.end());
 
     //Setup new thread, signals and slots.
-
     Crypto* worker = new Crypto;
     QThread* thread = new QThread;
-
-
 
     // Set the parameters
     worker->setParams(
@@ -347,7 +335,7 @@ void MainWindow::on_pushButton_clicked()
         memcost,
         timecost,
         threads,
-        argon2,
+        pbkdf,
         header
     );
 
@@ -376,8 +364,7 @@ void MainWindow::on_pushButton_clicked()
 
     //Show user parameters in text browser
     if(encryptToggle == "Encrypt") {
-        QString message = "Parameters used. If you forget these, you will not be able to decrypt your data. "
-                          "Recommended to store somewhere accessible.\n\n";
+        QString message = "Header: \n";
         message += header;
         ui->textBrowser->append(message + "\n");
     }
@@ -462,7 +449,6 @@ void MainWindow::on_comboBox_Algorithm_currentTextChanged(const QString &arg1)
     else ui->comboBox_cipherMode->setEnabled(true);
 }
 
-
 void MainWindow::on_pushButton_Add_clicked()
 {
     // Extract cipher and mode
@@ -502,8 +488,6 @@ void MainWindow::on_pushButton_Add_clicked()
     ui->lineEdit_cipherChain->setText(chainText);
 }
 
-
-
 void MainWindow::on_pushButton_Remove_clicked()
 {
     if (cipherList.empty()) return;
@@ -536,9 +520,6 @@ void MainWindow::on_pushButton_Remove_clicked()
     ui->lineEdit_cipherChain->setText(chainText);
 }
 
-
-
-
 void MainWindow::on_checkBox_chainToggle_stateChanged(int arg1)
 {
     ui->pushButton_Add->setEnabled(arg1);
@@ -548,6 +529,38 @@ void MainWindow::on_checkBox_chainToggle_stateChanged(int arg1)
     if(!arg1) {
         cipherList.clear();
         ui->lineEdit_cipherChain->setText("");
+    }
+}
+
+
+void MainWindow::on_comboBox_Argon2_currentTextChanged(const QString &arg1)
+{
+    if(arg1 == "PBKDF2"){
+        ui->lineEdit_timecost->setMaxLength(4);
+        ui->lineEdit_threads->setText("0");
+        ui->lineEdit_memcost->setText("0");
+        ui->lineEdit_memcost->setEnabled(false);
+        ui->lineEdit_threads->setEnabled(false);
+        ui->label_timecost->setText("Passes (1000s)");
+        ui->lineEdit_timecost->setText("600");
+    }
+    if(arg1.contains("Argon")) {
+        ui->lineEdit_timecost->setMaxLength(3);
+        ui->lineEdit_memcost->setEnabled(true);
+        ui->lineEdit_threads->setEnabled(true);
+        ui->label_timecost->setText("Passes");
+        ui->lineEdit_threads->setText("4");
+        ui->lineEdit_memcost->setText("256");
+        ui->lineEdit_timecost->setText("1");
+    }
+    if(arg1.contains("Scrypt")){
+        ui->lineEdit_timecost->setMaxLength(2);
+        ui->lineEdit_memcost->setEnabled(true);
+        ui->lineEdit_threads->setEnabled(true);
+        ui->label_timecost->setText("Passes (2^x)");
+        ui->lineEdit_threads->setText("4");
+        ui->lineEdit_memcost->setText("8");
+        ui->lineEdit_timecost->setText("16");
     }
 }
 

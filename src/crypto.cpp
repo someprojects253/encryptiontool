@@ -4,7 +4,7 @@ Crypto::Crypto(QObject *parent) : QObject(parent) {}
 
 void Crypto::setParams(const QString& input, const QString& output, const QString& password, const QString& mode,
                         const QString& encryptToggle, const std::vector<std::vector<std::string>>& cipherList,
-                        size_t memcost, size_t timecost, size_t threads, QString argon2, QString header)
+                        size_t memcost, size_t timecost, size_t threads, QString pbkdf, QString header)
 {
     this->inputFile = input.toStdString();
     this->outputFile = output.toStdString();
@@ -17,7 +17,7 @@ void Crypto::setParams(const QString& input, const QString& output, const QStrin
     this->memcost = memcost;
     this->timecost = timecost;
     this->threads = threads;
-    this->argon2 = argon2.toStdString();
+    this->pbkdf = pbkdf.toStdString();
 
     initialCipherListSize = cipherList.size();
 
@@ -95,13 +95,25 @@ void Crypto::deriveKey(const std::vector<uint8_t>& salt, size_t keysize)
 
     int result;
     //time, memory, threads, password, password length, salt, salt length, output buffer, output length
-    if(argon2 == "Argon2id")  result = argon2id_hash_raw(t, M, p, pwd_data, pwd_len, salt.data(), salt.size(), key.data(), key.size());
-    if(argon2 == "Argon2d")  result = argon2d_hash_raw(t, M, p, pwd_data, pwd_len, salt.data(), salt.size(), key.data(), key.size());
-    if(argon2 == "Argon2i")  result = argon2i_hash_raw(t, M, p, pwd_data, pwd_len, salt.data(), salt.size(), key.data(), key.size());
+    if(pbkdf == "Argon2id")  result = argon2id_hash_raw(t, M, p, pwd_data, pwd_len, salt.data(), salt.size(), key.data(), key.size());
+    if(pbkdf == "Argon2d")  result = argon2d_hash_raw(t, M, p, pwd_data, pwd_len, salt.data(), salt.size(), key.data(), key.size());
+    if(pbkdf == "Argon2i")  result = argon2i_hash_raw(t, M, p, pwd_data, pwd_len, salt.data(), salt.size(), key.data(), key.size());
 
-    if (result != ARGON2_OK) {
-        throw std::runtime_error(std::string("Argon2 error: ") + argon2_error_message(result));
+    if(pbkdf == "PBKDF2(HMAC(SHA-512))"){
+        timecost *= 1000;
+        auto pwd_fam = Botan::PasswordHashFamily::create_or_throw(pbkdf)->from_params(timecost);
+        pwd_fam->hash(key, password, salt);
     }
+    if(pbkdf == "Scrypt") {
+        timecost = 1 << timecost;
+        memcost /= 1024;
+        auto pwd_fam = Botan::PasswordHashFamily::create_or_throw(pbkdf)->from_params(timecost, memcost, threads);
+        pwd_fam->hash(key, password, salt);
+    }
+
+    // if (result != ARGON2_OK) {
+    //     throw std::runtime_error(std::string("Argon2 error: ") + argon2_error_message(result));
+    // }
 }
 
 void Crypto::setKeySizes()
@@ -186,10 +198,13 @@ void Crypto::encrypt()
     if(mode == "GCM") iv.resize(12);
     if(mode == "OCB") iv.resize(15);
 
+    std::vector<uint8_t> ad_vec(header.begin(), header.end());
+
     if(encryptToggle == "Encrypt")
     {
         try{
             enc = Botan::Cipher_Mode::create_or_throw(combined, Botan::Cipher_Dir::Encryption);
+            // enc = Botan::AEAD_Mode::create_or_throw(combined, Botan::Cipher_Dir::Encryption);
         }
         catch (const Botan::Exception& e){
             cipherList.clear();
@@ -276,6 +291,8 @@ void Crypto::encrypt()
     //Setup
     try{
         enc->set_key(cipher_key);
+        // if(mode == "GCM" || mode == "EAX" || mode == "OCB" || mode == "SIV" || cipher == "ChaCha20Poly1305")
+        //     enc->set_associated_data(ad_vec);
 
         if(encryptToggle == "Encrypt"){
             if(mode != "SIV") enc->start(iv);

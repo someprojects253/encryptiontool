@@ -49,6 +49,8 @@ private slots:
 
     void on_checkBox_chainToggle_stateChanged(int arg1);
 
+    void on_comboBox_Argon2_currentTextChanged(const QString &arg1);
+
 private:
     Ui::MainWindow *ui;
     QString header;

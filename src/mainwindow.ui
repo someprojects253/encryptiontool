@@ -246,12 +246,22 @@
             <string>Argon2i</string>
            </property>
           </item>
+          <item>
+           <property name="text">
+            <string>PBKDF2</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Scrypt</string>
+           </property>
+          </item>
          </widget>
         </item>
         <item>
          <layout class="QHBoxLayout" name="horizontalLayout_5">
           <item>
-           <widget class="QLabel" name="label_4">
+           <widget class="QLabel" name="label_memcost">
             <property name="text">
              <string>Memcost (MiB)</string>
             </property>
@@ -266,7 +276,7 @@
              </size>
             </property>
             <property name="text">
-             <string>100</string>
+             <string>10</string>
             </property>
            </widget>
           </item>
@@ -274,8 +284,8 @@
         </item>
         <item>
          <layout class="QHBoxLayout" name="horizontalLayout_6">
-          <item alignment="Qt::AlignmentFlag::AlignRight">
-           <widget class="QLabel" name="label_5">
+          <item>
+           <widget class="QLabel" name="label_timecost">
             <property name="text">
              <string>Passes</string>
             </property>
@@ -285,7 +295,7 @@
            <widget class="QLineEdit" name="lineEdit_timecost">
             <property name="maximumSize">
              <size>
-              <width>30</width>
+              <width>60</width>
               <height>16777215</height>
              </size>
             </property>
@@ -293,7 +303,7 @@
              <string>1</string>
             </property>
             <property name="maxLength">
-             <number>3</number>
+             <number>4</number>
             </property>
            </widget>
           </item>
@@ -302,7 +312,7 @@
         <item>
          <layout class="QHBoxLayout" name="horizontalLayout_7">
           <item alignment="Qt::AlignmentFlag::AlignRight">
-           <widget class="QLabel" name="label_6">
+           <widget class="QLabel" name="label_threads">
             <property name="text">
              <string>Threads</string>
             </property>
