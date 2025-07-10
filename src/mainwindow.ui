@@ -248,12 +248,12 @@
           </item>
           <item>
            <property name="text">
-            <string>PBKDF2</string>
+            <string>Scrypt</string>
            </property>
           </item>
           <item>
            <property name="text">
-            <string>Scrypt</string>
+            <string>PBKDF2</string>
            </property>
           </item>
          </widget>
@@ -276,7 +276,7 @@
              </size>
             </property>
             <property name="text">
-             <string>10</string>
+             <string>256</string>
             </property>
            </widget>
           </item>

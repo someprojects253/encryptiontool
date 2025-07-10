@@ -58,7 +58,8 @@ std::vector<uint8_t> Crypto::mac(Botan::secure_vector<uint8_t> key, int iv_and_s
     auto hmac = Botan::MessageAuthenticationCode::create_or_throw("HMAC(SHA-256)");
     hmac->set_key(key);
 
-    fin.seekg(iv_and_salt_size + header.size(), std::ios::beg);
+    // fin.seekg(iv_and_salt_size + header.size(), std::ios::beg);
+    fin.seekg(0, std::ios::beg);
     while (true)
     {
         fin.read(reinterpret_cast<char*>(buffer.data()), buffer.size());

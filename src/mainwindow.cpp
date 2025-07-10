@@ -549,6 +549,7 @@ void MainWindow::on_comboBox_Argon2_currentTextChanged(const QString &arg1)
         ui->lineEdit_memcost->setEnabled(true);
         ui->lineEdit_threads->setEnabled(true);
         ui->label_timecost->setText("Passes");
+        ui->label_memcost->setText("Memcost (MiB)");
         ui->lineEdit_threads->setText("4");
         ui->lineEdit_memcost->setText("256");
         ui->lineEdit_timecost->setText("1");
@@ -558,9 +559,10 @@ void MainWindow::on_comboBox_Argon2_currentTextChanged(const QString &arg1)
         ui->lineEdit_memcost->setEnabled(true);
         ui->lineEdit_threads->setEnabled(true);
         ui->label_timecost->setText("Passes (2^x)");
-        ui->lineEdit_threads->setText("4");
+        ui->label_memcost->setText("Memcost");
+        ui->lineEdit_threads->setText("1");
         ui->lineEdit_memcost->setText("8");
-        ui->lineEdit_timecost->setText("16");
+        ui->lineEdit_timecost->setText("18");
     }
 }
 
