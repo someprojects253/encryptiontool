@@ -298,6 +298,11 @@ void MainWindow::on_pushButton_clicked()
 
         header += "endheader";
     }
+    if(!ui->checkBox_header->isChecked()){
+        ui->textBrowser->append(header);
+        ui->textBrowser->append("Warning: Header will not be written to file. If you forget your encryption settings, you will not be able to decrypt your file. Recommended to write settings down somewhere.");
+        header = "";
+    }
 
     //Change cipher labels for Botan functions. Add cipher + mode to cipherList
     // if(algorithm == "AES") algorithm.replace("AES","AES-256");
@@ -363,11 +368,11 @@ void MainWindow::on_pushButton_clicked()
 
 
     //Show user parameters in text browser
-    if(encryptToggle == "Encrypt") {
-        QString message = "Header: \n";
-        message += header;
-        ui->textBrowser->append(message + "\n");
-    }
+    // if(encryptToggle == "Encrypt") {
+    //     QString message = "Header: \n";
+    //     message += header;
+    //     ui->textBrowser->append(message + "\n");
+    // }
 
     thread->start();
 
