@@ -203,7 +203,7 @@ void Crypto::encrypt()
     std::vector<uint8_t> associated_data(header.begin(), header.end());
 
     bool isAEAD = false;
-    if(mode != "CBC" && mode != "CTR" && header.size() > 0)
+    if(mode != "CBC" && mode != "CTR-BE" && header.size() > 0)
         isAEAD = true;
 
     if(encryptToggle == "Encrypt")
@@ -371,7 +371,7 @@ void Crypto::encrypt()
                 }
                 fout.write(reinterpret_cast<const char*>(chunk.data()), chunk.size());
             }
-            else {
+            else { // not last chunk
 
                 if(isAEAD){
                     encAEAD->update(chunk);
