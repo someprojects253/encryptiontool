@@ -549,7 +549,7 @@ void MainWindow::on_checkBox_chainToggle_stateChanged(int arg1)
 void MainWindow::on_comboBox_Argon2_currentTextChanged(const QString &arg1)
 {
     // if decrying parameters should be from header or manually entered
-    if(ui->comboBox_EncryptDecrypt->currentText() == "Decrypt") return;
+    bool encrypt = (ui->comboBox_EncryptDecrypt->currentText() == "Encrypt");
 
     if(arg1 == "PBKDF2"){
         ui->lineEdit_timecost->setMaxLength(4);
@@ -557,8 +557,11 @@ void MainWindow::on_comboBox_Argon2_currentTextChanged(const QString &arg1)
         ui->lineEdit_memcost->setText("0");
         ui->lineEdit_memcost->setEnabled(false);
         ui->lineEdit_threads->setEnabled(false);
+
+        if(encrypt) {
         ui->label_timecost->setText("Passes (1000s)");
         ui->lineEdit_timecost->setText("600");
+        }
     }
     if(arg1.contains("Argon")) {
         ui->lineEdit_timecost->setMaxLength(3);
@@ -566,9 +569,12 @@ void MainWindow::on_comboBox_Argon2_currentTextChanged(const QString &arg1)
         ui->lineEdit_threads->setEnabled(true);
         ui->label_timecost->setText("Passes");
         ui->label_memcost->setText("Memcost (MiB)");
+
+        if(encrypt) {
         ui->lineEdit_threads->setText("4");
         ui->lineEdit_memcost->setText("2048");
         ui->lineEdit_timecost->setText("1");
+        }
     }
     if(arg1.contains("Scrypt")){
         ui->lineEdit_timecost->setMaxLength(2);
@@ -576,9 +582,12 @@ void MainWindow::on_comboBox_Argon2_currentTextChanged(const QString &arg1)
         ui->lineEdit_threads->setEnabled(true);
         ui->label_timecost->setText("Passes (2^x)");
         ui->label_memcost->setText("Memcost");
+
+        if(encrypt) {
         ui->lineEdit_threads->setText("1");
         ui->lineEdit_memcost->setText("8");
         ui->lineEdit_timecost->setText("20");
+        }
     }
 }
 
