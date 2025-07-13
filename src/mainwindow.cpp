@@ -557,9 +557,9 @@ void MainWindow::on_comboBox_Argon2_currentTextChanged(const QString &arg1)
         ui->lineEdit_memcost->setText("0");
         ui->lineEdit_memcost->setEnabled(false);
         ui->lineEdit_threads->setEnabled(false);
+        ui->label_timecost->setText("Passes (1000s)");
 
         if(encrypt) {
-        ui->label_timecost->setText("Passes (1000s)");
         ui->lineEdit_timecost->setText("600");
         }
     }
