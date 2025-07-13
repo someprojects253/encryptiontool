@@ -159,6 +159,7 @@ void Crypto::encrypt()
 
     //Setup crypto variables
     std::unique_ptr<Botan::Cipher_Mode> enc;
+     std::unique_ptr<Botan::AEAD_Mode> encAEAD;
     Botan::AutoSeeded_RNG rng;
 
     Botan::secure_vector<uint8_t> cipher_key;
@@ -199,12 +200,19 @@ void Crypto::encrypt()
     if(mode == "GCM") iv.resize(12);
     if(mode == "OCB") iv.resize(15);
 
-    std::vector<uint8_t> ad_vec(header.begin(), header.end());
+    std::vector<uint8_t> associated_data(header.begin(), header.end());
+
+    bool isAEAD = false;
+    if(mode != "CBC" && mode != "CTR" && header.size() > 0)
+        isAEAD = true;
 
     if(encryptToggle == "Encrypt")
     {
         try{
-            enc = Botan::Cipher_Mode::create_or_throw(combined, Botan::Cipher_Dir::Encryption);
+            if(isAEAD)
+                encAEAD = Botan::AEAD_Mode::create_or_throw(combined, Botan::Cipher_Dir::Encryption);
+            else
+                enc = Botan::Cipher_Mode::create_or_throw(combined, Botan::Cipher_Dir::Encryption);
             // enc = Botan::AEAD_Mode::create_or_throw(combined, Botan::Cipher_Dir::Encryption);
         }
         catch (const Botan::Exception& e){
@@ -236,7 +244,10 @@ void Crypto::encrypt()
             std::copy(buffer.begin() + salt.size(), buffer.begin() + salt.size() + iv.size(), iv.begin());
 
         try{
-            enc = Botan::Cipher_Mode::create_or_throw(combined, Botan::Cipher_Dir::Decryption);
+            if(isAEAD)
+                encAEAD = Botan::AEAD_Mode::create_or_throw(combined, Botan::Cipher_Dir::Decryption);
+            else
+                enc = Botan::Cipher_Mode::create_or_throw(combined, Botan::Cipher_Dir::Decryption);
         }
         catch (const Botan::Exception& e){
             QString errormsg = QString(e.what());
@@ -291,20 +302,35 @@ void Crypto::encrypt()
 
     //Setup
     try{
-        enc->set_key(cipher_key);
-        // if(mode == "GCM" || mode == "EAX" || mode == "OCB" || mode == "SIV" || cipher == "ChaCha20Poly1305")
-        //     enc->set_associated_data(ad_vec);
+        if(isAEAD) { // for authenticatd modes
+            encAEAD->set_key(cipher_key);
+            encAEAD->set_associated_data(associated_data);
 
-        if(encryptToggle == "Encrypt"){
-            if(mode != "SIV") enc->start(iv);
-            else enc->start();
-        }
-        if(encryptToggle == "Decrypt") {
-            if(mode == "SIV")
-            {
-                fin.seekg(header.size() + salt.size(), std::ios::beg);
-                enc->start();
-            } else enc->start(iv);
+            if(encryptToggle == "Encrypt"){
+                if(mode != "SIV") encAEAD->start(iv);
+                else encAEAD->start();
+            }
+            if(encryptToggle == "Decrypt") {
+                if(mode == "SIV")
+                {
+                    fin.seekg(header.size() + salt.size(), std::ios::beg);
+                    encAEAD->start();
+                } else encAEAD->start(iv);
+            }
+        } else { // unauthenticated modes
+            enc->set_key(cipher_key);
+
+            if(encryptToggle == "Encrypt"){
+                if(mode != "SIV") enc->start(iv);
+                else enc->start();
+            }
+            if(encryptToggle == "Decrypt") {
+                if(mode == "SIV")
+                {
+                    fin.seekg(header.size() + salt.size(), std::ios::beg);
+                    enc->start();
+                } else enc->start(iv);
+            }
         }
     }catch(const Botan::Exception& e) {
         QString errormsg = QString(e.what());
@@ -338,11 +364,20 @@ void Crypto::encrypt()
                 // Removing HMAC tag from Encrypt-then-MAC, if applicable
                 if((mode == "CBC/PKCS7" || mode == "CTR-BE") && encryptToggle == "Decrypt" && cipherList.size() == initialCipherListSize)
                     chunk.resize((chunk.size() - 32)); // 32 is hmac sha256 size
-                enc->finish(chunk);
+                if(isAEAD){
+                    encAEAD->finish(chunk);
+                } else{ //unauthenticated
+                    enc->finish(chunk);
+                }
                 fout.write(reinterpret_cast<const char*>(chunk.data()), chunk.size());
             }
             else {
-                enc->update(chunk);
+
+                if(isAEAD){
+                    encAEAD->update(chunk);
+                } else { //unauthenticated
+                    enc->update(chunk);
+                }
                 if(mode != "SIV") fout.write(reinterpret_cast<const char*>(chunk.data()), chunk.size());
             }
 

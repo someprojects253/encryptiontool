@@ -40,6 +40,14 @@ MainWindow::MainWindow(QWidget *parent)
             ui->comboBox_cipherMode->setItemData(3, QVariant(), Qt::UserRole -1);
         }
     });
+
+    connect(ui->lineEdit_timecost, &QLineEdit::textChanged, this, [this]{
+        int iterations = ui->lineEdit_timecost->text().toInt();
+        if(ui->comboBox_Argon2->currentText() == "Scrypt"){
+            iterations = 1 << iterations;
+            ui->lineEdit_timecost->setToolTip(QString::number(iterations));
+        }
+    });
 }
 
 MainWindow::~MainWindow()
