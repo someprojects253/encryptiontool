@@ -213,7 +213,6 @@ void Crypto::encrypt()
                 encAEAD = Botan::AEAD_Mode::create_or_throw(combined, Botan::Cipher_Dir::Encryption);
             else
                 enc = Botan::Cipher_Mode::create_or_throw(combined, Botan::Cipher_Dir::Encryption);
-            // enc = Botan::AEAD_Mode::create_or_throw(combined, Botan::Cipher_Dir::Encryption);
         }
         catch (const Botan::Exception& e){
             cipherList.clear();
