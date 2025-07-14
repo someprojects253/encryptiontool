@@ -203,7 +203,7 @@ void Crypto::encrypt()
     std::vector<uint8_t> associated_data(header.begin(), header.end());
 
     bool isAEAD = false;
-    if(mode != "CBC/PKCS7" && mode != "CTR-BE" && header.size() > 0)
+    if(mode != "CBC/PKCS7" && mode != "CTR-BE" && algo != "ChaCha20" && header.size() > 0)
         isAEAD = true;
 
     if(encryptToggle == "Encrypt")
