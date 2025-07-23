@@ -314,7 +314,7 @@ void MainWindow::on_pushButton_clicked()
 
     //Change cipher labels for Botan functions. Add cipher + mode to cipherList
     // if(algorithm == "AES") algorithm.replace("AES","AES-256");
-    if(algorithm == "XChaCha20") { algorithm.replace("XChaCha20", "ChaCha20Poly1305"); mode = "";}
+    if(algorithm == "ChaCha20") { algorithm.replace("ChaCha20", "ChaCha20Poly1305"); }
 
     if(!ui->checkBox_chainToggle->isChecked())
         cipherList.push_back({algorithm.toStdString(), mode.toStdString()});
@@ -323,7 +323,7 @@ void MainWindow::on_pushButton_clicked()
     for(size_t i = 0; i < cipherList.size(); i++) {
         if(cipherList[i][0] == "AES") cipherList[i][0] = "AES-256";
         if(cipherList[i][0] == "Camellia") cipherList[i][0] = "Camellia-256";
-        if(cipherList[i][0] == "XChaCha20") cipherList[i][0] = "ChaCha20";
+        // if(cipherList[i][0] == "XChaCha20") cipherList[i][0] = "ChaCha20";
         if(cipherList[i][1] == "CBC") cipherList[i][1] = "CBC/PKCS7";
         if(cipherList[i][1] == "CTR") cipherList[i][1] = "CTR-BE";
     }
@@ -458,8 +458,16 @@ void MainWindow::updateButtonState()
 
 void MainWindow::on_comboBox_Algorithm_currentTextChanged(const QString &arg1)
 {
-    if(arg1 == "XChaCha20") ui->comboBox_cipherMode->setEnabled(false);
-    else ui->comboBox_cipherMode->setEnabled(true);
+    ui->comboBox_cipherMode->clear();
+    if(arg1 == "ChaCha20") {
+        ui->comboBox_cipherMode->addItems({"192-bit", "96-bit", "64-bit"});
+        ui->comboBox_cipherMode->setToolTip("This refers to the nonce size. 64-bit allows for larger files (exabytes).\n"
+                                      "96-bit and 192-bit have smaller file size limit (256GiB) but lower chance of nonce reuse.\n"
+                                      "ChaCha20 is always used with Poly1305.");
+    } else {
+        ui->comboBox_cipherMode->addItems({"GCM", "OCB", "EAX", "SIV", "CBC", "CTR"});
+        ui->comboBox_cipherMode->setToolTip("");
+    }
 }
 
 void MainWindow::on_pushButton_Add_clicked()

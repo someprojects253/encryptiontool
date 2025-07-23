@@ -159,7 +159,7 @@ void Crypto::encrypt()
 
     //Setup crypto variables
     std::unique_ptr<Botan::Cipher_Mode> enc;
-     std::unique_ptr<Botan::AEAD_Mode> encAEAD;
+    std::unique_ptr<Botan::AEAD_Mode> encAEAD;
     Botan::AutoSeeded_RNG rng;
 
     Botan::secure_vector<uint8_t> cipher_key;
@@ -194,11 +194,14 @@ void Crypto::encrypt()
     //Resize IVs
     //Overview: IV size default 16. 64 for Threefish-512, 32 for SHACAL2. 24 for XChaCha20
     iv.resize(16);
-    if(algo == "ChaCha20Poly1305" || algo == "ChaCha20") iv.resize(24);
+    // if(algo == "ChaCha20Poly1305" || algo == "ChaCha20") iv.resize(24);
     if(algo == "SHACAL2") iv.resize(32);
     if(algo == "Threefish-512") iv.resize(64);
     if(mode == "GCM") iv.resize(12);
     if(mode == "OCB") iv.resize(15);
+    if(mode == "192-bit") iv.resize(24);
+    if(mode == "96-bit") iv.resize(12);
+    if(mode == "64-bit") iv.resize(8);
 
     std::vector<uint8_t> associated_data(header.begin(), header.end());
 

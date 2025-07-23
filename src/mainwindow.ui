@@ -89,17 +89,17 @@
           </property>
           <item>
            <property name="text">
+            <string>GCM</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
             <string>OCB</string>
            </property>
           </item>
           <item>
            <property name="text">
             <string>EAX</string>
-           </property>
-          </item>
-          <item>
-           <property name="text">
-            <string>GCM</string>
            </property>
           </item>
           <item>
@@ -128,17 +128,17 @@
           </item>
           <item>
            <property name="text">
+            <string>ChaCha20</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
             <string>Serpent</string>
            </property>
           </item>
           <item>
            <property name="text">
             <string>Twofish</string>
-           </property>
-          </item>
-          <item>
-           <property name="text">
-            <string>Camellia</string>
            </property>
           </item>
           <item>
@@ -153,7 +153,7 @@
           </item>
           <item>
            <property name="text">
-            <string>XChaCha20</string>
+            <string>Camellia</string>
            </property>
           </item>
           <item>
