@@ -202,6 +202,7 @@ void MainWindow::setParams()
                     cipherstr = algostr.substr(0, pos);
                     modestr = algostr.substr(pos + 1);
                 }
+                if(cipherstr == "AES-256") cipherstr = "AES";
 
                 int index = ui->comboBox_cipher->findText(QString::fromStdString(cipherstr));
                 ui->comboBox_cipher->setCurrentIndex(index);
