@@ -101,7 +101,6 @@ void Crypto::run()
         std::span<uint8_t> associated_data(reinterpret_cast<uint8_t*>(header.data()), header.size());
         if(header.size() > 0) enc->set_associated_data(associated_data);
         if(mode != "SIV") enc->start(iv);
-        else enc->start();
     } catch(const Botan::Exception& e) {
         emit sendMessage(QString(e.what()));
         emit finished();
@@ -122,6 +121,18 @@ void Crypto::run()
        if(mode != "SIV") inputFileHandle.seekg(salt.size() + iv.size() + header.size(), std::ios::beg);
        else inputFileHandle.seekg(salt.size() + header.size(), std::ios::beg);
     }
+
+    if(mode == "SIV") {
+        if(encryptToggle == "Decrypt")
+            buffer.resize(filesize - salt.size() - header.size());
+        else
+            buffer.resize(filesize);
+        inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
+        enc->finish(buffer);
+        outputFileHandle.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
+        emit finished();
+        return;
+    }
     while(true)
     {
             inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
@@ -135,14 +146,12 @@ void Crypto::run()
             std::vector<uint8_t> chunk(buffer.begin(), buffer.begin() + bytesRead);
 
             try {
-                if(!isLastChunk) {
-                    enc->update(chunk);
-                    if(mode != "SIV") outputFileHandle.write(reinterpret_cast<const char*>(chunk.data()), chunk.size());
-                }
-                else {
-                    enc->finish(chunk);
-                    outputFileHandle.write(reinterpret_cast<const char*>(chunk.data()), chunk.size());
-                }
+                if(!isLastChunk) enc->update(chunk);
+
+                else enc->finish(chunk);
+
+                outputFileHandle.write(reinterpret_cast<const char*>(chunk.data()), chunk.size());
+
             } catch(const Botan::Exception& e) {
                 emit sendMessage(QString(e.what()));
                 emit finished();
