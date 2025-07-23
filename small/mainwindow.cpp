@@ -30,11 +30,16 @@ MainWindow::MainWindow(QWidget *parent)
             ui->comboBox_mode->setToolTip("This refers to the nonce size. 64-bit allows for larger files (exabytes).\n"
                                           "96-bit and 192-bit have smaller file size limit (256GiB) but lower chance of nonce reuse.\n"
                                           "ChaCha20 is always used with Poly1305.");
-        } else {
+        } else if(item != "SHACAL2" && item != "Threefish-512"){
             ui->comboBox_mode->addItems({"GCM", "OCB", "EAX", "SIV"});
+            ui->comboBox_mode->setToolTip("");
+        } else {
+            ui->comboBox_mode->addItems({"OCB", "EAX"});
             ui->comboBox_mode->setToolTip("");
         }
     });
+
+    connect (ui->comboBox_PBKDF, &QComboBox::currentTextChanged, this, &MainWindow::updateLabels);
 
     connect(ui->checkBox_showPassword, &QCheckBox::checkStateChanged, this, [this](const Qt::CheckState& checkState) {
         if(checkState == Qt::Checked){
@@ -87,6 +92,22 @@ void MainWindow::run(std::string encryptToggle)
                             "memcost=" + std::to_string(memcost) + "\n"
                             "timecost=" + std::to_string(timecost) + "\n"
                             "threads=" + std::to_string(threads) + "\nendheader";
+
+            std::string from, to;
+            if(pbkdf != "Scrypt" && pbkdf != "PBKDF2"){
+                from = "memcost";
+                to = "memcost(MiB)";
+            }
+            if(pbkdf == "PBKDF2"){
+                from = "timecost";
+                to = "timecost(1000s)";
+            }
+            if(pbkdf == "Scrypt") {
+                from = "timecost";
+                to = "timecost(2^x)";
+            }
+            if (auto pos = header.find(from); pos != std::string::npos)
+                header.replace(pos, from.length(), to);
         } else {
             this->header="";
         }
@@ -210,9 +231,30 @@ void MainWindow::setParams()
                 ui->comboBox_mode->setCurrentIndex(index);
             }
             if(key == "memcost" || key == "memcost(MiB)")  ui->lineEdit_memcost->setText(QString::fromStdString(value));
-            if(key == "timecost") ui->lineEdit_timecost->setText(QString::fromStdString(value));
+            if(key == "timecost" || key == "timecost(2^x)" || key == "timecost(1000s)") ui->lineEdit_timecost->setText(QString::fromStdString(value));
             if(key == "threads") ui->lineEdit_threads->setText(QString::fromStdString(value));
         }
+    }
+}
+
+void MainWindow::updateLabels()
+{
+    QString current_pbkdf = ui->comboBox_PBKDF->currentText();
+
+    if(current_pbkdf == "PBKDF2"){
+        ui->lineEdit_memcost->setEnabled(false);
+        ui->lineEdit_threads->setEnabled(false);
+        ui->label_iterations->setText("Iterations (1000s)");
+    }
+    if(current_pbkdf == "Argon2id" || current_pbkdf == "Argon2i" || current_pbkdf == "Argon2d") {
+        ui->lineEdit_memcost->setEnabled(true);
+        ui->lineEdit_threads->setEnabled(true);
+        ui->label_iterations->setText("Iterations");
+    }
+    if(current_pbkdf == "Scrypt"){
+        ui->lineEdit_memcost->setEnabled(true);
+        ui->lineEdit_threads->setEnabled(true);
+        ui->label_iterations->setText("Iterations (2^x)");
     }
 }
 
