@@ -84,13 +84,13 @@ void Crypto::run()
         iv = rng.random_vec<std::vector<uint8_t>>(iv.size());
         if(header.size() > 0) outputFileHandle.write(reinterpret_cast<char*>(header.data()), header.size());
         outputFileHandle.write(reinterpret_cast<char*>(salt.data()), salt.size());
-        outputFileHandle.write(reinterpret_cast<char*>(iv.data()), iv.size());
+        if(mode != "SIV") outputFileHandle.write(reinterpret_cast<char*>(iv.data()), iv.size());
     }
     if(encryptToggle == "Decrypt") {
         enc = Botan::AEAD_Mode::create_or_throw(algostrview, Botan::Cipher_Dir::Decryption);
         inputFileHandle.seekg(header.size(), std::ios::beg);
         inputFileHandle.read(reinterpret_cast<char*>(salt.data()), salt.size());
-        inputFileHandle.read(reinterpret_cast<char*>(iv.data()), iv.size());
+        if(mode != "SIV") inputFileHandle.read(reinterpret_cast<char*>(iv.data()), iv.size());
     }
 
     key.resize(enc->maximum_keylength());
@@ -118,7 +118,10 @@ void Crypto::run()
     inputFileHandle.seekg(0, std::ios::end);
     size_t filesize = inputFileHandle.tellg();
     if(encryptToggle == "Encrypt") inputFileHandle.seekg(0, std::ios::beg);
-    if(encryptToggle == "Decrypt") inputFileHandle.seekg(salt.size() + iv.size() + header.size(), std::ios::beg);
+    if(encryptToggle == "Decrypt") {
+       if(mode != "SIV") inputFileHandle.seekg(salt.size() + iv.size() + header.size(), std::ios::beg);
+       else inputFileHandle.seekg(salt.size() + header.size(), std::ios::beg);
+    }
     while(true)
     {
             inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
