@@ -215,6 +215,7 @@ void MainWindow::run(std::string encryptToggle)
     ui->pushButton_Decrypt->setEnabled(false);
 
     ui->lineEdit_Password->clear();
+    ui->lineEdit_confirmPassword->clear();
     password = "";
     thread->start();
 }
