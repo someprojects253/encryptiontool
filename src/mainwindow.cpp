@@ -55,6 +55,7 @@ MainWindow::MainWindow(QWidget *parent)
         ui->lineEdit_inputFile->setText(QString::fromStdString(inputFilePath));
         getHeader();
         updateButtons();
+        setParams("header");
     });
 
     // Information about ciphers and modes. Add and remove modes based on ciphers.
@@ -94,7 +95,10 @@ MainWindow::MainWindow(QWidget *parent)
     });
 
     // Update labels for different PBKDFs
-    connect (ui->comboBox_PBKDF, &QComboBox::currentTextChanged, this, &MainWindow::updateLabels);
+    connect (ui->comboBox_PBKDF, &QComboBox::currentTextChanged, this, [this](){
+        updateLabels();
+        setParams();
+    });
 }
 
 MainWindow::~MainWindow()
@@ -265,8 +269,26 @@ void MainWindow::getHeader()
     setParams();
 }
 
-void MainWindow::setParams()
+void MainWindow::setParams(QString preset)
 {
+    if(preset != "header") {
+        QString pbkdf = ui->comboBox_PBKDF->currentText();
+        if(pbkdf == "PBKDF2") {
+            ui->lineEdit_memcost->setText("0");
+            ui->lineEdit_threads->setText("0");
+            ui->lineEdit_timecost->setText("600");
+        } else if (pbkdf == "Scrypt") {
+            ui->lineEdit_threads->setText("1");
+            ui->lineEdit_memcost->setText("8");
+            ui->lineEdit_timecost->setText("20");
+        } else { // Argon2
+            ui->lineEdit_threads->setText("1");
+            ui->lineEdit_memcost->setText("2048");
+            ui->lineEdit_timecost->setText("1");
+        }
+        return;
+    }
+
     cipherList.clear();
     std::istringstream stream(header);
     std::string line;
