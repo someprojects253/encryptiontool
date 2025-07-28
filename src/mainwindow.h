@@ -7,6 +7,7 @@
 #include <QDropEvent>
 #include <QMimeData>
 #include <QStringList>
+#include <QString>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -25,7 +26,7 @@ public:
     void run(std::string encryptToggle);
     void updateButtons();
     void getHeader();
-    void setParams();
+    void setParams(std::string preset);
     void updateLabels();
     void updateCipherList(QString addToggle);
 

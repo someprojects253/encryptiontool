@@ -54,8 +54,9 @@ MainWindow::MainWindow(QWidget *parent)
     connect(this, &MainWindow::fileDropped, this, [this]() {
         ui->lineEdit_inputFile->setText(QString::fromStdString(inputFilePath));
         getHeader();
+        if(header.size() > 0) setParams("header");
+        else setParams("");
         updateButtons();
-        setParams("header");
     });
 
     // Information about ciphers and modes. Add and remove modes based on ciphers.
@@ -69,14 +70,14 @@ MainWindow::MainWindow(QWidget *parent)
         else if (item == "Blowfish" || item == "IDEA" || item == "3DES") {
             ui->comboBox_mode->addItems({"CBC", "CTR", "CFB", "OFB", "EAX"});
             ui->textBrowser->append(item + ": This is a 64-bit block cipher. Recommended not to encrypt more than "
-                                    "4GB with this cipher.");
+                                    "4GB with this cipher.\n");
         }
         else if (item == "ChaCha20"){
             ui->comboBox_mode->addItems({"192-bit", "96-bit", "64-bit"});
             ui->textBrowser->append("ChaCha20 will be used with Poly1305 if it is the only cipher used or if it is the last cipher used in a chain. "
                                     "The number of bits refers to the nonce size. 64-bit has a higher proabability of nonce reuse but "
                                     "a higher file size limit (exabytes). 96-bit and 192-bit nonces have a lower probability of nonce reuse "
-                                    "but a lower file size limit (256GB). ChaCha20 with a 192-bit nonce is XChaCha20.");
+                                    "but a lower file size limit (256GB). ChaCha20 with a 192-bit nonce is XChaCha20.\n");
         }
         else
             ui->comboBox_mode->addItems({"CBC", "CTR", "OCB", "EAX", "SIV", "CCM", "CFB", "OFB"});
@@ -85,19 +86,19 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(ui->comboBox_mode, &QComboBox::currentTextChanged, this, [this] (QString item) {
         if(item == "CCM")
-            ui->textBrowser->append("Warning: CCM mode has max file size of 4GB. Entire file is loaded into memory. Ensure you have enough memory available.");
+            ui->textBrowser->append("Warning: CCM mode has max file size of 4GB. Entire file is loaded into memory. Ensure you have enough memory available.\n");
         if(item == "SIV")
             ui->textBrowser->append("Warning: SIV mode loads entire file into memory. Ensure you have enough memory available.");
         if(item == "CTR" || item == "CBC" || item == "CFB" || item == "OFB")
             ui->textBrowser->append(item+ ": This is an unauthenticated mode. If a cipher is used in this mode, and if it is the only cipher "
                                     "used, or if it is the last cipher used in a chain, authentication will be added with HMAC-SHA256. "
-                                    "The authentication tag is 32 bytes and will be added to the end of the file.");
+                                    "The authentication tag is 32 bytes and will be added to the end of the file.\n");
     });
 
     // Update labels for different PBKDFs
     connect (ui->comboBox_PBKDF, &QComboBox::currentTextChanged, this, [this](){
         updateLabels();
-        setParams();
+        setParams("");
     });
 }
 
@@ -220,7 +221,8 @@ void MainWindow::run(std::string encryptToggle)
 
     ui->lineEdit_Password->clear();
     ui->lineEdit_confirmPassword->clear();
-    password = "";
+    password.clear();
+    header.clear();
     thread->start();
 }
 
@@ -266,10 +268,9 @@ void MainWindow::getHeader()
     std::string fullHeader = headerStream.str();
     ui->textBrowser->append("Header found: \n" + QString::fromStdString(fullHeader));
     this->header = fullHeader;  // Assuming `header` is a member variable
-    setParams();
 }
 
-void MainWindow::setParams(QString preset)
+void MainWindow::setParams(std::string preset)
 {
     if(preset != "header") {
         QString pbkdf = ui->comboBox_PBKDF->currentText();
@@ -282,7 +283,7 @@ void MainWindow::setParams(QString preset)
             ui->lineEdit_memcost->setText("8");
             ui->lineEdit_timecost->setText("20");
         } else { // Argon2
-            ui->lineEdit_threads->setText("1");
+            ui->lineEdit_threads->setText("4");
             ui->lineEdit_memcost->setText("2048");
             ui->lineEdit_timecost->setText("1");
         }
