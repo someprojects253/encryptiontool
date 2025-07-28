@@ -1,444 +1,344 @@
 #include "crypto.h"
 
-Crypto::Crypto(QObject *parent) : QObject(parent) {}
-
-void Crypto::setParams(const QString& input, const QString& output, const QString& password, const QString& mode,
-                        const QString& encryptToggle, const std::vector<std::vector<std::string>>& cipherList,
-                        size_t memcost, size_t timecost, size_t threads, QString pbkdf, QString header)
+Crypto::Crypto(QObject *parent, std::string encryptToggle, std::string password,
+std::string inputFilePath, std::string outputFilePath, std::string pbkdf, size_t memcost, size_t timecost, size_t threads,
+std::string header, std::vector<std::string> cipherList)
+    : QObject{parent}
 {
-    this->inputFile = input.toStdString();
-    this->outputFile = output.toStdString();
-    this->password = password.toStdString();
-    this->mode = mode.toStdString();
-    this->encryptToggle = encryptToggle.toStdString();
+    this->encryptToggle = encryptToggle;
+    this->password = password;
+    this->inputFilePath = inputFilePath;
+    this->outputFilePath = outputFilePath;
+    this->pbkdf = pbkdf;
+    this->memcost=memcost;
+    this->timecost=timecost;
+    this->threads=threads;
+    this->header = header;
     this->cipherList = cipherList;
-    this->header = header.toStdString();
-
-    this->memcost = memcost;
-    this->timecost = timecost;
-    this->threads = threads;
-    this->pbkdf = pbkdf.toStdString();
-
-    initialCipherListSize = cipherList.size();
-
-    initialOutputFile = outputFile;
-
-    if(cipherList.size() > 1) outputFile = "temp7UXgmUZb";
-
-    mainKeySize = 0;
-
-    std::string algo = cipherList[0][0];
-    std::string algomode = cipherList[0][1];
-
-    if(encryptToggle == "Encrypt"){
-        Botan::AutoSeeded_RNG rng;
-        salt = rng.random_vec<std::vector<uint8_t>>(32);
-    } else {
-        std::ifstream file(inputFile, std::ios::binary);
-        file.seekg(header.size(), std::ios::beg);
-        salt.resize(32);
-        file.read(reinterpret_cast<char*>(salt.data()), 32);
-        file.close();
-    }
-
+    this->initialOutputFile = outputFilePath;
+    this->initialListSize = cipherList.size();
 }
 
-std::vector<uint8_t> Crypto::mac(Botan::secure_vector<uint8_t> key, int iv_and_salt_size)
+void Crypto::deriveKey(std::vector<uint8_t> salt)
 {
-    emit sendMessage("Computing MAC");
-    std::string file_to_mac;
-    if(encryptToggle == "Encrypt") file_to_mac = outputFile;
-    else file_to_mac = inputFile;
+    size_t MiB = 1024;
+    std::unique_ptr<Botan::PasswordHash> pwd_fam;
 
-    std::ifstream fin(file_to_mac, std::ios::binary);
-    std::vector<uint8_t> buffer (4096);
+    //Botan for Scrypt and PBKDF2, libargon2 for Argon2
+    try {
+        if(pbkdf == "Argon2i" || pbkdf == "Argon2id" || pbkdf == "Argon2d") {
+            memcost = memcost * MiB;
+            const void* pwd_data = this->password.data();
+            size_t pwd_len = this->password.size();
 
-    std::vector<uint8_t> hash;
+            int result;
+            //time, memory, threads, password, password length, salt, salt length, output buffer, output length
+            if(pbkdf == "Argon2id")  result = argon2id_hash_raw(timecost, memcost, threads, pwd_data, pwd_len, salt.data(), salt.size(), key.data(), key.size());
+            if(pbkdf == "Argon2d")  result = argon2d_hash_raw(timecost, memcost, threads, pwd_data, pwd_len, salt.data(), salt.size(), key.data(), key.size());
+            if(pbkdf == "Argon2i")  result = argon2i_hash_raw(timecost, memcost, threads, pwd_data, pwd_len, salt.data(), salt.size(), key.data(), key.size());
 
-    auto hmac = Botan::MessageAuthenticationCode::create_or_throw("HMAC(SHA-256)");
-    hmac->set_key(key);
-
-    // fin.seekg(iv_and_salt_size + header.size(), std::ios::beg);
-    fin.seekg(0, std::ios::beg);
-    while (true)
-    {
-        fin.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
-        std::streamsize bytesRead = fin.gcount();
-
-        if (bytesRead == 0)
-            break; // EOF
-
-        std::vector<uint8_t> chunk(buffer.begin(), buffer.begin() + bytesRead);
-
-        bool isLastChunk = fin.eof();
-        if(isLastChunk && encryptToggle == "Decrypt"){  chunk.resize(chunk.size() - 32); } //sha-256 size
-        hmac->update(chunk);
-    }
-    fin.close();
-
-    hmac->final(hash);
-    emit sendMessage("MAC computed.");
-    return hash;
-}
-
-void Crypto::deriveKey(const std::vector<uint8_t>& salt, size_t keysize)
-{
-    emit sendMessage("Deriving key");
-
-    uint32_t M = static_cast<uint32_t>(memcost);   // Memory in KiB
-    uint32_t t = static_cast<uint32_t>(timecost);  // Iterations
-    uint32_t p = static_cast<uint32_t>(threads);   // Parallelism
-
-    key.resize(keysize);
-
-    const void* pwd_data = this->password.data();
-    size_t pwd_len = this->password.size();
-
-    int result;
-    //time, memory, threads, password, password length, salt, salt length, output buffer, output length
-    if(pbkdf == "Argon2id")  result = argon2id_hash_raw(t, M, p, pwd_data, pwd_len, salt.data(), salt.size(), key.data(), key.size());
-    if(pbkdf == "Argon2d")  result = argon2d_hash_raw(t, M, p, pwd_data, pwd_len, salt.data(), salt.size(), key.data(), key.size());
-    if(pbkdf == "Argon2i")  result = argon2i_hash_raw(t, M, p, pwd_data, pwd_len, salt.data(), salt.size(), key.data(), key.size());
-
-    if(pbkdf == "PBKDF2(HMAC(SHA-512))"){
-        timecost *= 1000;
-        auto pwd_fam = Botan::PasswordHashFamily::create_or_throw(pbkdf)->from_params(timecost);
-        pwd_fam->hash(key, password, salt);
-    }
-    if(pbkdf == "Scrypt") {
-        timecost = 1 << timecost;
-        memcost /= 1024;
-        auto pwd_fam = Botan::PasswordHashFamily::create_or_throw(pbkdf)->from_params(timecost, memcost, threads);
-        pwd_fam->hash(key, password, salt);
-    }
-
-    // if (result != ARGON2_OK) {
-    //     throw std::runtime_error(std::string("Argon2 error: ") + argon2_error_message(result));
-    // }
-}
-
-void Crypto::setKeySizes()
-{
-    int keysize = 32;
-    std::string algo, mode;
-    for(size_t i = 0; i < cipherList.size(); i++)
-    {
-        algo = cipherList[i][0];
-        mode = cipherList[i][1];
-        keysize = 32;
-        if(algo == "SHACAL2" || algo == "Threefish-512") keysize = 64;
-
-        if(algo == "SM4") keysize = 16;
-
-        // 32 bytes for HMAC-SHA256 tag
-        // If chaining and encrypting, only need MAC key for last encryption
-        // If chaining and decrypting, only need MAC key for first decryption
-        if((mode == "CBC/PKCS7" || mode == "CTR-BE")){
-            if(encryptToggle == "Encrypt" && i == initialCipherListSize-1)
-                keysize += 32;
-            if(encryptToggle == "Decrypt" && i == 0)
-                keysize += 32;
+            if (result != ARGON2_OK) {
+                throw std::runtime_error(std::string("Argon2 error: ") + argon2_error_message(result));
+            }
         }
-
-        if(mode == "SIV") keysize += 32;
-        cipherList[i].push_back(std::to_string(keysize));
-        mainKeySize += keysize;
+        if(pbkdf == "Scrypt") {
+            timecost = 1 << timecost;
+            pwd_fam = Botan::PasswordHashFamily::create_or_throw(pbkdf)->from_params(timecost, memcost, threads);
+        }
+        if(pbkdf == "PBKDF2") {
+            timecost = timecost * 1000;
+            pwd_fam = Botan::PasswordHashFamily::create_or_throw(pbkdf)->from_params(timecost);
+        }
+    } catch(const std::exception& e) {
+        emit sendMessage(QString::fromStdString(e.what()));
+        emit finished();
+        return;
     }
+
+    if(pbkdf == "PBKDF2" || pbkdf == "Scrypt") pwd_fam->hash(key, password, salt);
+    password.clear(); // Probably should be cleared in a better way
 }
 
-void Crypto::encrypt()
+void Crypto::run()
 {
-    //Renaming files for cascade
-    if(cipherList.size() == 1) outputFile = initialOutputFile;
-    else cleanupFiles.push_back(outputFile); // these will be deleted after crypto operations are complete
-
-    std::ifstream fin(inputFile, std::ios::binary);
-    std::ofstream fout(outputFile, std::ios::binary);
-    std::vector<uint8_t> buffer (4096);
-
-
-    //Setup crypto variables
-    std::unique_ptr<Botan::Cipher_Mode> enc;
-    std::unique_ptr<Botan::AEAD_Mode> encAEAD;
     Botan::AutoSeeded_RNG rng;
-
+    std::vector<uint8_t> iv(0);
+    std::unique_ptr<Botan::AEAD_Mode> encAEAD;
+    std::unique_ptr<Botan::Cipher_Mode> enc;
+    std::unique_ptr<Botan::MessageAuthenticationCode> hmac;
+    std::vector<uint8_t> hmac_tag;
     Botan::secure_vector<uint8_t> cipher_key;
-    Botan::secure_vector<uint8_t> mac_key;
-    std::vector<uint8_t> hash_output;
+    Botan::secure_vector<uint8_t> hmac_key;
+    std::ifstream inputFileHandle(inputFilePath, std::ios::binary);
+    std::ofstream outputFileHandle(outputFilePath, std::ios::binary | std::ios::app);
+    bool isOuter = (encryptToggle == "Encrypt" && cipherList.size() == 1) || (encryptToggle == "Decrypt" && cipherList.size() == initialListSize);
+    // isOuter is an important variable. Refers to outermost cipher in a chain. For example, for AES(Serpent(Twofish)),
+    // AES is the outermost cipher.
 
-
-    std::string combined;
-    std::string_view algo;
-
-    algo = this->cipherList[0][0];
-    mode = this->cipherList[0][1];
-
-
-
-    if(algo != "ChaCha20Poly1305" && algo != "ChaCha20") {
-        combined = algo + "/" + mode;
-    }
-    if(algo == "ChaCha20Poly1305" || algo == "ChaCha20") combined = algo;
-
-    size_t keysize = std::stoi(cipherList[0][2]);
-    Botan::secure_vector<uint8_t> subkey;
-
-    if(encryptToggle == "Encrypt") {
-        subkey.assign(key.begin(), key.begin() + keysize);
-        key.erase(key.begin(), key.begin() + keysize);
-    } else { // Decrypt
-        subkey.assign(key.end() - keysize, key.end());
-        key.resize(key.size() - keysize);
-    }
-
-    //Resize IVs
-    //Overview: IV size default 16. 64 for Threefish-512, 32 for SHACAL2. 24 for XChaCha20
-    iv.resize(16);
-    // if(algo == "ChaCha20Poly1305" || algo == "ChaCha20") iv.resize(24);
-    if(algo == "SHACAL2") iv.resize(32);
-    if(algo == "Threefish-512") iv.resize(64);
+    // Resizing ivs, setting cipher string to pass to Botan
     if(mode == "GCM") iv.resize(12);
     if(mode == "OCB") iv.resize(15);
+    if(mode == "EAX") iv.resize(Botan::BlockCipher::create(cipher)->block_size());
+    if(mode == "CCM") {
+        mode = "CCM(16,4)";
+        iv.resize(11);
+    }
     if(mode == "192-bit") iv.resize(24);
     if(mode == "96-bit") iv.resize(12);
     if(mode == "64-bit") iv.resize(8);
+    if(mode == "CBC" || mode == "CTR" || mode == "CFB") iv.resize(Botan::BlockCipher::create(cipher)->block_size());
+    std::string algostr = cipher + "/" + mode;
+    if(cipher == "ChaCha20") algostr = "ChaCha20";
+    if(cipher == "ChaCha20Poly1305") algostr = "ChaCha20Poly1305";
+    if(mode == "CTR") algostr = "CTR-BE(" + cipher + ",4)";
+    if(mode == "OFB") algostr = "OFB(" + cipher + ")";
 
-    std::vector<uint8_t> associated_data(header.begin(), header.end());
+    bool isAEAD = (!(mode == "CBC" || mode == "CTR" || algostr == "ChaCha20" || mode == "CFB" || mode == "OFB"));
+    if(!isAEAD) hmac = Botan::MessageAuthenticationCode::create_or_throw("HMAC(SHA-256)");
 
-    bool isAEAD = false;
-    if(mode != "CBC/PKCS7" && mode != "CTR-BE" && algo != "ChaCha20" && header.size() > 0)
-        isAEAD = true;
+    emit sendMessage(QString::fromStdString(algostr));
 
-    if(encryptToggle == "Encrypt")
-    {
-        try{
-            if(isAEAD)
-                encAEAD = Botan::AEAD_Mode::create_or_throw(combined, Botan::Cipher_Dir::Encryption);
-            else
-                enc = Botan::Cipher_Mode::create_or_throw(combined, Botan::Cipher_Dir::Encryption);
-        }
-        catch (const Botan::Exception& e){
-            cipherList.clear();
-            QString errormsg = QString(e.what());
-            emit sendMessage(errormsg);
-            emit finished();
-            return;
-        }
-
-        if(cipherList.size() == 1){
-            fout.write(header.c_str(), header.size());
-            fout.write(reinterpret_cast<const char*>(salt.data()), salt.size());
-        }
-
-       if(mode != "SIV") {
+    // For encryption, write header and salt only for final encryption in chain.
+    if(encryptToggle == "Encrypt") {
+        dir = Botan::Cipher_Dir::Encryption;
         iv = rng.random_vec<std::vector<uint8_t>>(iv.size());
-        fout.write(reinterpret_cast<const char*>(iv.data()), iv.size());
+        if(isOuter) {
+            outputFileHandle.write(reinterpret_cast<char*>(header.data()), header.size());
+            outputFileHandle.write(reinterpret_cast<char*>(salt.data()), salt.size());
         }
+        if(mode != "SIV") outputFileHandle.write(reinterpret_cast<char*>(iv.data()), iv.size());
+    }
+    if(encryptToggle == "Decrypt") {
+        dir = Botan::Cipher_Dir::Decryption;
+        if(isOuter) {
+            inputFileHandle.seekg(header.size() + salt.size(), std::ios::beg);
+        }
+        if(mode != "SIV") inputFileHandle.read(reinterpret_cast<char*>(iv.data()), iv.size());
     }
 
-    else if(encryptToggle == "Decrypt")
+    // Setting up mode object. AEAD modes need separate class from non-AEAD modes.
+    try {
+        if(isAEAD){
+            encAEAD = Botan::AEAD_Mode::create_or_throw(algostr, dir);
+            cipher_key.resize(encAEAD->maximum_keylength());
+
+            if(encryptToggle == "Encrypt") {
+                cipher_key.assign(key.begin(), key.begin() + cipher_key.size());
+                key.erase(key.begin(), key.begin() + cipher_key.size());
+            }else {
+                cipher_key.assign(key.end() - cipher_key.size(), key.end());
+                key.resize(key.size() - cipher_key.size());
+            }
+
+            encAEAD->set_key(cipher_key);
+            std::span<uint8_t> associated_data(reinterpret_cast<uint8_t*>(header.data()), header.size());
+            if(header.size() > 0) encAEAD->set_associated_data(associated_data);
+            if(mode != "SIV") encAEAD->start(iv);
+        } else {
+            enc = Botan::Cipher_Mode::create_or_throw(algostr, dir);
+            cipher_key.resize(enc->maximum_keylength());
+
+            if(isOuter) {
+                if(encryptToggle == "Encrypt") {
+                    cipher_key.assign(key.begin(), key.begin() + cipher_key.size());
+                    hmac_key.assign(key.begin() + cipher_key.size(), key.begin() + cipher_key.size() + 32);
+                    key.erase(key.begin(), key.begin() + cipher_key.size() + 32);
+                }
+                if(encryptToggle == "Decrypt") {
+                    cipher_key.assign(key.end() - cipher_key.size() - 32, key.end() - 32);
+                    hmac_key.assign(key.end()-32, key.end());
+                    key.resize(key.size() - cipher_key.size()-32);
+                }
+                hmac->set_key(hmac_key);
+                hmac->update(header);
+            } else {
+                if(encryptToggle == "Encrypt") {
+                    cipher_key.assign(key.begin(), key.begin() + cipher_key.size());
+                    key.erase(key.begin(), key.begin() + cipher_key.size());
+                }
+                if(encryptToggle == "Decrypt") {
+                    cipher_key.assign(key.end() - cipher_key.size(), key.end());
+                    key.resize(key.size() - cipher_key.size());
+                }
+            }
+            enc->set_key(cipher_key);
+            enc->start(iv);
+        }
+    } catch(const Botan::Exception& e) {
+        emit sendMessage(QString(e.what()));
+        emit finished();
+        return;
+    }
+
+    size_t totalBytesRead = 0;
+    int lastPercent = -1;
+    std::vector<uint8_t> buffer(4096);
+    std::streamsize bytesRead;
+    bool isLastChunk;
+
+    inputFileHandle.seekg(0, std::ios::end);
+    size_t filesize = inputFileHandle.tellg();
+
+    //If encrypting, read file from start. If decrypting in mode other than SIV, start after header, salt and IV.
+    //If decrypting in SIV mode, start after header and salt (Cipher class handles IV in this case).
+    if(encryptToggle == "Encrypt") inputFileHandle.seekg(0, std::ios::beg);
+    if(encryptToggle == "Decrypt") {
+       if(mode != "SIV") {
+            if(isOuter) inputFileHandle.seekg(salt.size() + iv.size() + header.size(), std::ios::beg);
+            else inputFileHandle.seekg(iv.size(), std::ios::beg);
+       }
+       else inputFileHandle.seekg(salt.size() + header.size(), std::ios::beg);
+    }
+
+    //Load entire file into memory for SIV mode.
+    if(mode == "SIV") {
+        if(encryptToggle == "Decrypt")
+            buffer.resize(filesize - salt.size() - header.size());
+        else
+            buffer.resize(filesize);
+        inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
+        encAEAD->finish(buffer);
+        outputFileHandle.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
+        emit finished();
+        return;
+    }
+
+    //Process file in chunks for modes other than SIV
+    while(true)
     {
-        if(cipherList.size() == initialCipherListSize)
-            fin.seekg(header.size(), std::ios::beg);
-        fin.read(reinterpret_cast<char*>(buffer.data()), iv.size()+salt.size());
-        std::copy(buffer.begin(), buffer.begin() + salt.size(), salt.begin());
-        if(mode != "SIV")
-            std::copy(buffer.begin() + salt.size(), buffer.begin() + salt.size() + iv.size(), iv.begin());
+            inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
 
-        try{
-            if(isAEAD)
-                encAEAD = Botan::AEAD_Mode::create_or_throw(combined, Botan::Cipher_Dir::Decryption);
-            else
-                enc = Botan::Cipher_Mode::create_or_throw(combined, Botan::Cipher_Dir::Decryption);
-        }
-        catch (const Botan::Exception& e){
-            QString errormsg = QString(e.what());
-            emit sendMessage(errormsg);
-            emit finished();
-            cipherList.clear();
-            return;
-        }
-    }
+            bytesRead = inputFileHandle.gcount();
+            totalBytesRead += bytesRead;
+            if (bytesRead == 0)
+                break; // EOF
+            isLastChunk = inputFileHandle.eof();
 
-    if(mode != "CBC/PKCS7" && mode != "CTR-BE") {
-        cipher_key.resize(keysize);
-        std::copy(subkey.begin(), subkey.begin()+keysize, cipher_key.begin());
-    }
+            std::vector<uint8_t> chunk(buffer.begin(), buffer.begin() + bytesRead);
 
-    //Split key into cipher and MAC keys if needed
-    if((mode == "CBC/PKCS7" || mode == "CTR-BE")) {
-        if((encryptToggle == "Encrypt" && cipherList.size() == 1) || (encryptToggle == "Decrypt" && cipherList.size() == initialCipherListSize)) {
-            cipher_key.resize(keysize-32);
-            mac_key.resize(32);
-            std::copy(subkey.begin(), subkey.begin()+keysize-32, cipher_key.begin());
-            std::copy(subkey.begin()+keysize-32, subkey.end(), mac_key.begin());
-        } else{
-            cipher_key.resize(keysize);
-            std::copy(subkey.begin(), subkey.begin()+keysize, cipher_key.begin());
-        }
-    }
+            try {
+                if(!isLastChunk) {
+                    if(isAEAD) encAEAD->update(chunk);
+                    else {
+                        if(encryptToggle == "Decrypt" && isOuter) hmac->update(chunk);
+                        enc->update(chunk);
+                        if(encryptToggle == "Encrypt" && isOuter) hmac->update(chunk);
+                    }
+                } else { // last chunk
+                    if(isAEAD) encAEAD->finish(chunk);
+                    else {
+                        if(encryptToggle == "Decrypt" && isOuter){
+                            std::vector<uint8_t> tagcheck(chunk.end() - 32, chunk.end());
+                            chunk.resize(chunk.size()- 32);
+                            hmac->update(chunk);
+                            hmac->final(hmac_tag);
 
+                            if(hmac_tag != tagcheck)
+                                emit sendMessage("Authentication failed.");
+                            else
+                                emit sendMessage("Authentication successful.");
+                        }
+                        enc->finish(chunk);
+                        if(encryptToggle == "Encrypt" && isOuter) {
+                            hmac->update(chunk);
+                            hmac->final(hmac_tag);
+                        }
+                    }
+                }
 
-    //Verify MAC before decrypting if applicable
-    if(encryptToggle == "Decrypt" && (mode == "CBC/PKCS7" || mode == "CTR-BE") && cipherList.size() == initialCipherListSize) {
-        fin.seekg(0, std::ios::end);
-        std::streamoff fileSize = fin.tellg();
-        fin.seekg(fileSize - 32, std::ios::beg);
-        std::vector<uint8_t> mactag(32);
-        fin.read(reinterpret_cast<char*>(mactag.data()), 32);
+                outputFileHandle.write(reinterpret_cast<const char*>(chunk.data()), chunk.size());
 
-        fin.close();
-        fout.close();
-        hash_output = mac(mac_key, iv.size() + salt.size());
-        fout.open(outputFile, std::ios::binary);
-        fin.open(inputFile, std::ios::binary);
-        fin.seekg(header.size() + iv.size() + salt.size(), std::ios::beg);
-
-        if(mactag == hash_output) emit sendMessage("Authentication successful");
-        else {
-                emit sendMessage("Authentication failed. Stopping operations.");
-                cipherList.clear();
+            } catch(const Botan::Exception& e) {
+                emit sendMessage(QString(e.what()));
+                emit finished();
                 return;
             }
+
+            int percent = static_cast<int>((100.0 * totalBytesRead) / filesize);
+            if (percent != lastPercent) {
+                emit progress(percent);
+                lastPercent = percent;
+            }
     }
-
-    //Setup
-    try{
-        if(isAEAD) { // for authenticatd modes
-            encAEAD->set_key(cipher_key);
-            encAEAD->set_associated_data(associated_data);
-
-            if(encryptToggle == "Encrypt"){
-                if(mode != "SIV") encAEAD->start(iv);
-                else encAEAD->start();
-            }
-            if(encryptToggle == "Decrypt") {
-                if(mode == "SIV")
-                {
-                    fin.seekg(header.size() + salt.size(), std::ios::beg);
-                    encAEAD->start();
-                } else encAEAD->start(iv);
-            }
-        } else { // unauthenticated modes
-            enc->set_key(cipher_key);
-
-            if(encryptToggle == "Encrypt"){
-                if(mode != "SIV") enc->start(iv);
-                else enc->start();
-            }
-            if(encryptToggle == "Decrypt") {
-                if(mode == "SIV")
-                {
-                    fin.seekg(header.size() + salt.size(), std::ios::beg);
-                    enc->start();
-                } else enc->start(iv);
-            }
-        }
-    }catch(const Botan::Exception& e) {
-        QString errormsg = QString(e.what());
-        emit sendMessage(errormsg);
-        emit finished();
-        cipherList.clear();
-        return;
+    //Awkward placement, but MAC tag must be written to end of file.
+    if(!isAEAD) {
+        if(encryptToggle == "Encrypt" && isOuter) outputFileHandle.write(reinterpret_cast<const char*>(hmac_tag.data()), hmac_tag.size());
     }
-
-
-    //Encryption/decryption code
-    size_t totalBytesRead = 0;
-    const auto fileSize = std::filesystem::file_size(inputFile);
-    int lastPercent = -1;
-
-    while (true)
-    {
-        fin.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
-
-        std::streamsize bytesRead = fin.gcount();
-        totalBytesRead += bytesRead;
-        if (bytesRead == 0)
-            break; // EOF
-
-        bool isLastChunk = fin.eof();
-
-        std::vector<uint8_t> chunk(buffer.begin(), buffer.begin() + bytesRead);
-
-        try{
-            if (isLastChunk) {
-                // Removing HMAC tag from Encrypt-then-MAC, if applicable
-                if((mode == "CBC/PKCS7" || mode == "CTR-BE") && encryptToggle == "Decrypt" && cipherList.size() == initialCipherListSize)
-                    chunk.resize((chunk.size() - 32)); // 32 is hmac sha256 size
-                if(isAEAD){
-                    encAEAD->finish(chunk);
-                } else{ //unauthenticated
-                    enc->finish(chunk);
-                }
-                fout.write(reinterpret_cast<const char*>(chunk.data()), chunk.size());
-            }
-            else { // not last chunk
-
-                if(isAEAD){
-                    encAEAD->update(chunk);
-                } else { //unauthenticated
-                    enc->update(chunk);
-                }
-                if(mode != "SIV") fout.write(reinterpret_cast<const char*>(chunk.data()), chunk.size());
-            }
-
-        } catch(const Botan::Exception& e) {
-            QString errormsg = QString(e.what());
-            emit sendMessage(errormsg);
-            emit finished();
-            cipherList.clear();
-            return;
-        }
-
-        //Updating progress bar
-        int percent = static_cast<int>((100.0 * totalBytesRead) / fileSize);
-        if (percent != lastPercent) {
-            emit progress(percent);
-            lastPercent = percent;
-        }
-    }
-
-    //Generating and writing MAC tag if applicable
-    fin.close();
-    if(encryptToggle == "Encrypt" && (mode == "CBC/PKCS7" || mode == "CTR-BE") && cipherList.size() == 1) {
-        fout.close();
-        hash_output = mac(mac_key, iv.size() + salt.size());
-        fout.open(outputFile, std::ios::app | std::ios::binary);
-        fout.write(reinterpret_cast<const char*>(hash_output.data()), hash_output.size());
-    }
-    fout.close();
-
-    //Crypto operations complete. Removing item from list.
-    if(encryptToggle == "Decrypt" && cipherList.size() == initialCipherListSize) salt.resize(0);
-    cipherList.erase(cipherList.begin());
-    emit sendMessage("Round complete" + QString::fromStdString(" ") + QString::fromStdString(combined));
-    inputFile = outputFile;
-    outputFile = "temp" + std::to_string(initialCipherListSize - cipherList.size());
+    inputFileHandle.close();
+    outputFileHandle.close();
 }
 
-void Crypto::cipherLoop()
+void Crypto::start()
 {
-    setKeySizes();
-    try {
-        deriveKey(salt, mainKeySize);
-    } catch (const std::exception& e) {
-        emit sendMessage(QString("Key derivation failed: ") + e.what());
-        emit finished();
-        return;
+    //Set salt. Generate randomly for encryption, read from file for decryption.
+    salt.resize(32);
+    Botan::AutoSeeded_RNG rng;
+    std::ifstream inputFileHandle(inputFilePath, std::ios::binary);
+    std::ofstream outputFileHandle(outputFilePath, std::ios::binary);
+    if(encryptToggle == "Encrypt") {
+        salt = rng.random_vec<std::vector<uint8_t>>(32);
+    } else {
+        inputFileHandle.seekg(header.size(), std::ios::beg);
+        inputFileHandle.read(reinterpret_cast<char*>(salt.data()), salt.size());
+    }
+    inputFileHandle.close();
+    outputFileHandle.close();
+
+    //Generate intermediate file list for chained encryption.
+    for(int i = 0; i < cipherList.size(); i++) {
+        std::string filepath = "output" + std::to_string(i+1);
+        fileList.push_back(filepath);
+    }
+    if(encryptToggle == "Encrypt") dir = Botan::Cipher_Dir::Encryption;
+    else dir = Botan::Cipher_Dir::Decryption;
+
+    //Get key sizes and derive main key
+    int keysize = 0;
+
+    for(size_t i = 0; i < cipherList.size(); i++){
+        std::string item = cipherList[i];
+        std::string algostr = item;
+        size_t pos = item.find('/');
+
+        if (pos != std::string::npos) {
+            cipher = item.substr(0, pos);
+            mode = item.substr(pos + 1);
+        }
+        bool isAEAD = (!(mode == "CBC" || mode == "CTR" || mode == "CFB" || mode == "OFB"));
+        if(mode == "CTR") algostr = "CTR-BE(" + cipher + ",4)";
+        if(cipher == "ChaCha20" || cipher == "ChaCha20Poly1305") algostr = "ChaCha20";
+        keysize += Botan::Cipher_Mode::create_or_throw(algostr, dir)->maximum_keylength();
+        bool isOuter = ((encryptToggle == "Encrypt" && i == cipherList.size()-1)) || (encryptToggle == "Decrypt" && i == 0);
+        if(!isAEAD && isOuter) keysize += 32;
     }
 
-    for(size_t i = 0; i < initialCipherListSize; i++){
-        if(cipherList.size() > 0) encrypt();
+    key.resize(keysize);
+    deriveKey(salt);
+
+    // Apply ciphers in cipherList
+    for(int i = 0; i < initialListSize; i++) {
+        std::string algostr = cipherList[0];
+        size_t pos = algostr.find('/');
+
+        if (pos != std::string::npos) {
+            cipher = algostr.substr(0, pos);
+            mode = algostr.substr(pos + 1);
+        }
+        if(cipherList.size() == 1) {
+            outputFilePath = initialOutputFile;
+        } else {
+            outputFilePath = fileList[i];
+        }
+        run();
+        inputFilePath = outputFilePath;
+        cipherList.erase(cipherList.begin());
     }
 
-    emit sendMessage("Done");
-
-    for( const std::string& file : cleanupFiles) {
-        std::filesystem::remove(file);
+    // Clean up files
+    for (const std::string& item : fileList) {
+        std::filesystem::remove(item);
     }
 
-    password = "";
-    emit progress(100);
     emit finished();
+    return;
 }

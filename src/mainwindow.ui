@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>449</width>
-    <height>549</height>
+    <width>453</width>
+    <height>504</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -18,7 +18,7 @@
     <item>
      <layout class="QVBoxLayout" name="verticalLayout">
       <item>
-       <layout class="QHBoxLayout" name="horizontalLayout">
+       <layout class="QHBoxLayout" name="horizontalLayout_3">
         <item>
          <widget class="QLabel" name="label">
           <property name="text">
@@ -28,16 +28,13 @@
         </item>
         <item>
          <widget class="QLineEdit" name="lineEdit_Password">
-          <property name="text">
-           <string/>
-          </property>
           <property name="echoMode">
            <enum>QLineEdit::EchoMode::Password</enum>
           </property>
          </widget>
         </item>
         <item>
-         <widget class="QCheckBox" name="checkBox">
+         <widget class="QCheckBox" name="checkBox_showPassword">
           <property name="text">
            <string>Show</string>
           </property>
@@ -46,16 +43,16 @@
        </layout>
       </item>
       <item>
-       <layout class="QHBoxLayout" name="horizontalLayout_10">
+       <layout class="QHBoxLayout" name="horizontalLayout_2">
         <item>
-         <widget class="QLabel" name="label_confirm">
+         <widget class="QLabel" name="label_2">
           <property name="text">
            <string>Confirm</string>
           </property>
          </widget>
         </item>
         <item>
-         <widget class="QLineEdit" name="lineEdit_confirm">
+         <widget class="QLineEdit" name="lineEdit_confirmPassword">
           <property name="echoMode">
            <enum>QLineEdit::EchoMode::Password</enum>
           </property>
@@ -64,32 +61,22 @@
        </layout>
       </item>
       <item>
-       <layout class="QHBoxLayout" name="horizontalLayout_2">
+       <layout class="QHBoxLayout" name="horizontalLayout">
         <item>
-         <widget class="QComboBox" name="comboBox_EncryptDecrypt">
-          <item>
-           <property name="text">
-            <string>Encrypt</string>
-           </property>
-          </item>
-          <item>
-           <property name="text">
-            <string>Decrypt</string>
-           </property>
-          </item>
-         </widget>
-        </item>
-        <item>
-         <widget class="QComboBox" name="comboBox_cipherMode">
-          <property name="maximumSize">
-           <size>
-            <width>60</width>
-            <height>16777215</height>
-           </size>
-          </property>
+         <widget class="QComboBox" name="comboBox_mode">
           <item>
            <property name="text">
             <string>GCM</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>CBC</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>CTR</string>
            </property>
           </item>
           <item>
@@ -109,18 +96,23 @@
           </item>
           <item>
            <property name="text">
-            <string>CBC</string>
+            <string>CCM</string>
            </property>
           </item>
           <item>
            <property name="text">
-            <string>CTR</string>
+            <string>CFB</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>OFB</string>
            </property>
           </item>
          </widget>
         </item>
         <item>
-         <widget class="QComboBox" name="comboBox_Algorithm">
+         <widget class="QComboBox" name="comboBox_cipher">
           <item>
            <property name="text">
             <string>AES</string>
@@ -133,22 +125,7 @@
           </item>
           <item>
            <property name="text">
-            <string>Serpent</string>
-           </property>
-          </item>
-          <item>
-           <property name="text">
-            <string>Twofish</string>
-           </property>
-          </item>
-          <item>
-           <property name="text">
-            <string>SHACAL2</string>
-           </property>
-          </item>
-          <item>
-           <property name="text">
-            <string>Threefish-512</string>
+            <string>Kuznyechik</string>
            </property>
           </item>
           <item>
@@ -163,18 +140,58 @@
           </item>
           <item>
            <property name="text">
-            <string>Kuznyechik</string>
+            <string>Serpent</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Twofish</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Threefish-512</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>SHACAL2</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Blowfish</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>IDEA</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>3DES</string>
            </property>
           </item>
          </widget>
         </item>
         <item>
-         <widget class="QPushButton" name="pushButton">
+         <widget class="QPushButton" name="pushButton_Encrypt">
           <property name="enabled">
-           <bool>true</bool>
+           <bool>false</bool>
           </property>
           <property name="text">
-           <string>Start</string>
+           <string>Encrypt</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pushButton_Decrypt">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
+          <property name="text">
+           <string>Decrypt</string>
           </property>
          </widget>
         </item>
@@ -193,17 +210,14 @@
       <item>
        <layout class="QHBoxLayout" name="horizontalLayout_9">
         <item>
-         <widget class="QCheckBox" name="checkBox_chainToggle">
+         <widget class="QCheckBox" name="checkBox_chain">
           <property name="text">
            <string>Chain</string>
           </property>
          </widget>
         </item>
         <item>
-         <widget class="QPushButton" name="pushButton_Add">
-          <property name="enabled">
-           <bool>false</bool>
-          </property>
+         <widget class="QPushButton" name="pushButton_addCipher">
           <property name="maximumSize">
            <size>
             <width>30</width>
@@ -216,10 +230,7 @@
          </widget>
         </item>
         <item>
-         <widget class="QPushButton" name="pushButton_Remove">
-          <property name="enabled">
-           <bool>false</bool>
-          </property>
+         <widget class="QPushButton" name="pushButton_removeCipher">
           <property name="maximumSize">
            <size>
             <width>30</width>
@@ -232,12 +243,23 @@
          </widget>
         </item>
         <item>
-         <widget class="QLineEdit" name="lineEdit_cipherChain">
-          <property name="enabled">
-           <bool>false</bool>
+         <widget class="QLineEdit" name="lineEdit_cipherList"/>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_4">
+        <item>
+         <widget class="QLabel" name="label_inputFile">
+          <property name="text">
+           <string>Input file:</string>
           </property>
-          <property name="readOnly">
-           <bool>true</bool>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="lineEdit_inputFile">
+          <property name="text">
+           <string>Drag and drop file</string>
           </property>
          </widget>
         </item>
@@ -246,7 +268,7 @@
       <item>
        <layout class="QHBoxLayout" name="horizontalLayout_8">
         <item>
-         <widget class="QComboBox" name="comboBox_Argon2">
+         <widget class="QComboBox" name="comboBox_PBKDF">
           <item>
            <property name="text">
             <string>Argon2id</string>
@@ -275,7 +297,7 @@
          </widget>
         </item>
         <item>
-         <layout class="QHBoxLayout" name="horizontalLayout_5">
+         <layout class="QHBoxLayout" name="horizontalLayout_7">
           <item>
            <widget class="QLabel" name="label_memcost">
             <property name="text">
@@ -292,7 +314,7 @@
              </size>
             </property>
             <property name="text">
-             <string>256</string>
+             <string>1024</string>
             </property>
            </widget>
           </item>
@@ -301,9 +323,9 @@
         <item>
          <layout class="QHBoxLayout" name="horizontalLayout_6">
           <item>
-           <widget class="QLabel" name="label_timecost">
+           <widget class="QLabel" name="label_iterations">
             <property name="text">
-             <string>Passes</string>
+             <string>Iterations</string>
             </property>
            </widget>
           </item>
@@ -311,24 +333,21 @@
            <widget class="QLineEdit" name="lineEdit_timecost">
             <property name="maximumSize">
              <size>
-              <width>60</width>
+              <width>30</width>
               <height>16777215</height>
              </size>
             </property>
             <property name="text">
              <string>1</string>
             </property>
-            <property name="maxLength">
-             <number>4</number>
-            </property>
            </widget>
           </item>
          </layout>
         </item>
         <item>
-         <layout class="QHBoxLayout" name="horizontalLayout_7">
-          <item alignment="Qt::AlignmentFlag::AlignRight">
-           <widget class="QLabel" name="label_threads">
+         <layout class="QHBoxLayout" name="horizontalLayout_5">
+          <item>
+           <widget class="QLabel" name="label_3">
             <property name="text">
              <string>Threads</string>
             </property>
@@ -345,62 +364,9 @@
             <property name="text">
              <string>4</string>
             </property>
-            <property name="maxLength">
-             <number>2</number>
-            </property>
            </widget>
           </item>
          </layout>
-        </item>
-       </layout>
-      </item>
-      <item>
-       <layout class="QHBoxLayout" name="horizontalLayout_3">
-        <item>
-         <widget class="QPushButton" name="pushButton_inputFile">
-          <property name="text">
-           <string>Select</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QLabel" name="label_2">
-          <property name="text">
-           <string>Input file</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QLineEdit" name="lineEdit_inputFile">
-          <property name="text">
-           <string/>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </item>
-      <item>
-       <layout class="QHBoxLayout" name="horizontalLayout_4">
-        <item>
-         <widget class="QPushButton" name="pushButton_4">
-          <property name="text">
-           <string>Select</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QLabel" name="label_3">
-          <property name="text">
-           <string>Output file</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QLineEdit" name="lineEdit_outputFile">
-          <property name="text">
-           <string/>
-          </property>
-         </widget>
         </item>
        </layout>
       </item>
@@ -423,7 +389,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>449</width>
+     <width>453</width>
      <height>23</height>
     </rect>
    </property>

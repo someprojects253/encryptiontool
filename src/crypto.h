@@ -1,12 +1,8 @@
 #ifndef CRYPTO_H
 #define CRYPTO_H
 
-#include <QDebug>
-#include <filesystem>
-
 #include <QObject>
 #include <QString>
-#include <QByteArray>
 #include <botan/argon2.h>
 #include <botan/hex.h>
 #include <botan/auto_rng.h>
@@ -17,32 +13,24 @@
 #include <botan/system_rng.h>
 #include <botan/mac.h>
 #include <botan/aead.h>
-
-#include <fstream>
-#include <stdio.h>
 #include <iostream>
-
+#include <fstream>
 #include <argon2.h>
+#include <botan/kdf.h>
+#include <botan/block_cipher.h>
 
+#include <filesystem>
 
 class Crypto : public QObject
 {
     Q_OBJECT
-
 public:
-    explicit Crypto(QObject *parent = nullptr);
+    explicit Crypto(QObject *parent = nullptr, std::string encryptToggle="", std::string password="", std::string inputFilePath="", std::string outputFilePath="",
+                    std::string pbkdf="", size_t memcost=1, size_t timecost=1, size_t threads=1, std::string header="", std::vector<std::string> cipherList={});
 
-    void setParams(const QString& input, const QString& output, const QString& password, const QString& mode,
-                   const QString& encryptToggle, const std::vector<std::vector<std::string>>& cipherList,
-                    size_t memcost, size_t timecost, size_t threads, QString pbkdf, QString header);
-
-public slots:
-    void encrypt();
-    void cipherLoop();
-    std::vector<uint8_t> mac(Botan::secure_vector<uint8_t> key, int iv_and_salt_size);
-    void deriveKey(const std::vector<uint8_t>& salt, size_t keysize);
-
-    void setKeySizes();
+    void run();
+    void deriveKey(std::vector<uint8_t> salt);
+    void start();
 
 signals:
     void finished();
@@ -50,28 +38,15 @@ signals:
     void sendMessage(QString);
 
 private:
-    std::string inputFile;
-    std::string outputFile;
-    std::string password;
-    std::string mode;
-    std::string cipher;
-    std::string encryptToggle;
-    std::string pbkdf;
-    std::string intermediateMode, finalMode;
-    std::string header;
-    size_t memcost, timecost, threads;
-    std::vector<std::vector<std::string>> cipherList;
-
+    std::string encryptToggle, cipher, mode, password, inputFilePath, outputFilePath, pbkdf, header;
     Botan::secure_vector<uint8_t> key;
-
-    size_t initialCipherListSize;
-    int mainKeySize;
+    size_t memcost, timecost, threads;
+    std::vector<std::string> cipherList, fileList;
+    std::vector<uint8_t> salt;
+    int initialListSize;
+    Botan::Cipher_Dir dir;
 
     std::string initialOutputFile;
-
-    std::vector<std::string> cleanupFiles;
-    std::vector<uint8_t> salt;
-    std::vector<uint8_t> iv;
 };
 
 #endif // CRYPTO_H

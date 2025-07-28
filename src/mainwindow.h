@@ -2,14 +2,11 @@
 #define MAINWINDOW_H
 
 #include "crypto.h"
-
 #include <QMainWindow>
-#include <botan/system_rng.h>
 #include <QThread>
-
-#include <fstream>
-#include <stdio.h>
-#include <iostream>
+#include <QDropEvent>
+#include <QMimeData>
+#include <QStringList>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -23,37 +20,35 @@ class MainWindow : public QMainWindow
 
 public:
     MainWindow(QWidget *parent = nullptr);
-
-    void updateButtonState();
-    void setInputFields();
     ~MainWindow();
 
-private slots:
-    void on_pushButton_inputFile_clicked();
+    void run(std::string encryptToggle);
+    void updateButtons();
+    void getHeader();
+    void setParams();
+    void updateLabels();
+    void updateCipherList(QString addToggle);
 
-    void on_pushButton_4_clicked();
+signals:
+    void fileDropped();
+protected:
+    void dragEnterEvent(QDragEnterEvent* event) override {
+        if (event->mimeData()->hasUrls())
+            event->acceptProposedAction();
+    }
 
-    void on_pushButton_clicked();
-
-    void on_checkBox_checkStateChanged(const Qt::CheckState &arg1);
-
-    void on_lineEdit_Password_textEdited(const QString &arg1);
-
-    void on_comboBox_EncryptDecrypt_currentIndexChanged(int index);
-
-    void on_comboBox_Algorithm_currentTextChanged(const QString &arg1);
-
-    void on_pushButton_Add_clicked();
-
-    void on_pushButton_Remove_clicked();
-
-    void on_checkBox_chainToggle_stateChanged(int arg1);
-
-    void on_comboBox_Argon2_currentTextChanged(const QString &arg1);
+    void dropEvent(QDropEvent* event) override {
+        const QList<QUrl> urls = event->mimeData()->urls();
+        if (!urls.isEmpty()) {
+            inputFilePath = urls.first().toLocalFile().toStdString(); // Only the first file
+            emit fileDropped();
+        }
+    }
 
 private:
     Ui::MainWindow *ui;
-    QString header;
-    std::vector<std::vector<std::string>> cipherList;
+    QString localFilePath;
+    std::string inputFilePath, outputFilePath, header;
+    std::vector<std::string> cipherList;
 };
 #endif // MAINWINDOW_H
