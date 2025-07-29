@@ -86,13 +86,16 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(ui->comboBox_mode, &QComboBox::currentTextChanged, this, [this] (QString item) {
         if(item == "CCM")
-            ui->textBrowser->append("Warning: CCM mode has max file size of 4GB. Entire file is loaded into memory. Ensure you have enough memory available.\n");
+            ui->textBrowser->append("Warning: CCM mode (L=4) has max file size of 4GB. Entire file is loaded into memory. Ensure you have enough memory available.\n");
         if(item == "SIV")
             ui->textBrowser->append("Warning: SIV mode loads entire file into memory. Ensure you have enough memory available.");
         if(item == "CTR" || item == "CBC" || item == "CFB" || item == "OFB")
             ui->textBrowser->append(item+ ": This is an unauthenticated mode. If a cipher is used in this mode, and if it is the only cipher "
                                     "used, or if it is the last cipher used in a chain, authentication will be added with HMAC-SHA256. "
                                     "The authentication tag is 32 bytes and will be added to the end of the file.\n");
+        if(item == "CTR")
+            ui->textBrowser->append("The counter portion is set to 8 bytes for CTR. The allows for a maximum file size"
+                                    " of approximately 2^64 blocks of data.\n");
     });
 
     // Update labels for different PBKDFs
@@ -203,6 +206,7 @@ void MainWindow::run(std::string encryptToggle)
         this->header.clear();
         cipherList.clear();
         ui->lineEdit_cipherList->clear();
+        ui->textBrowser->append("Done");
     });
     connect(worker, &Crypto::finished, thread, &QThread::quit);
     connect(worker, &Crypto::finished, worker, &QObject::deleteLater);

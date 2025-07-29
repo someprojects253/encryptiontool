@@ -47,6 +47,7 @@ void Crypto::deriveKey(std::vector<uint8_t> salt)
         }
         if(pbkdf == "PBKDF2") {
             timecost = timecost * 1000;
+            pbkdf = "PBKDF2(HMAC(SHA-256))";
             pwd_fam = Botan::PasswordHashFamily::create_or_throw(pbkdf)->from_params(timecost);
         }
     } catch(const std::exception& e) {
@@ -54,8 +55,7 @@ void Crypto::deriveKey(std::vector<uint8_t> salt)
         emit finished();
         return;
     }
-
-    if(pbkdf == "PBKDF2" || pbkdf == "Scrypt") pwd_fam->hash(key, password, salt);
+    if(pbkdf == "PBKDF2(HMAC(SHA-256))" || pbkdf == "Scrypt") pwd_fam->hash(key, password, salt);
     password.clear(); // Probably should be cleared in a better way
 }
 
@@ -90,7 +90,7 @@ void Crypto::run()
     std::string algostr = cipher + "/" + mode;
     if(cipher == "ChaCha20") algostr = "ChaCha20";
     if(cipher == "ChaCha20Poly1305") algostr = "ChaCha20Poly1305";
-    if(mode == "CTR") algostr = "CTR-BE(" + cipher + ",4)";
+    if(mode == "CTR") algostr = "CTR-BE(" + cipher + ",8)";
     if(mode == "OFB") algostr = "OFB(" + cipher + ")";
 
     bool isAEAD = (!(mode == "CBC" || mode == "CTR" || algostr == "ChaCha20" || mode == "CFB" || mode == "OFB"));
@@ -117,6 +117,7 @@ void Crypto::run()
     }
 
     // Setting up mode object. AEAD modes need separate class from non-AEAD modes.
+    // Getting key for cipher and MAC if applicable.
     try {
         if(isAEAD){
             encAEAD = Botan::AEAD_Mode::create_or_throw(algostr, dir);
@@ -136,6 +137,7 @@ void Crypto::run()
             if(mode != "SIV") encAEAD->start(iv);
         } else {
             enc = Botan::Cipher_Mode::create_or_throw(algostr, dir);
+            emit sendMessage(QString::number(enc->maximum_keylength()));
             cipher_key.resize(enc->maximum_keylength());
 
             if(isOuter) {
