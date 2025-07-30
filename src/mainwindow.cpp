@@ -61,16 +61,16 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Information about ciphers and modes. Add and remove modes based on ciphers.
     connect(ui->comboBox_cipher, &QComboBox::currentTextChanged, this, [this] (QString item){
+        ui->textBrowser->clear();
         ui->comboBox_mode->clear();
-        ui->comboBox_mode->setToolTip("");
         if(item == "AES")
             ui->comboBox_mode->addItems({"GCM", "CBC", "CTR", "OCB", "EAX", "SIV", "CCM", "CFB", "OFB"});
         else if (item == "SHACAL2" || item == "Threefish-512")
-            ui->comboBox_mode->addItems({"CBC", "CTR", "OCB", "EAX", "CFB", "OFB"});
+            ui->comboBox_mode->addItems({"CTR", "CBC", "OCB", "EAX", "CFB", "OFB"});
         else if (item == "Blowfish" || item == "IDEA" || item == "3DES") {
-            ui->comboBox_mode->addItems({"CBC", "CTR", "CFB", "OFB", "EAX"});
+            ui->comboBox_mode->addItems({"CTR", "CBC", "CFB", "OFB", "EAX"});
             ui->textBrowser->append(item + ": This is a 64-bit block cipher. Recommended not to encrypt more than "
-                                    "4GB with this cipher.\n");
+                                           "4GB with this cipher.\n");
         }
         else if (item == "ChaCha20"){
             ui->comboBox_mode->addItems({"192-bit", "96-bit", "64-bit"});
@@ -78,21 +78,22 @@ MainWindow::MainWindow(QWidget *parent)
                                     "The number of bits refers to the nonce size. 64-bit has a higher proabability of nonce reuse but "
                                     "a higher file size limit (exabytes). 96-bit and 192-bit nonces have a lower probability of nonce reuse "
                                     "but a lower file size limit (256GB). ChaCha20 with a 192-bit nonce is XChaCha20.\n");
+        } else {
+            ui->comboBox_mode->addItems({"CTR", "CBC", "OCB", "EAX", "SIV", "CCM", "CFB", "OFB"});
         }
-        else
-            ui->comboBox_mode->addItems({"CBC", "CTR", "OCB", "EAX", "SIV", "CCM", "CFB", "OFB"});
-
     });
 
     connect(ui->comboBox_mode, &QComboBox::currentTextChanged, this, [this] (QString item) {
+        if(item == "GCM")
+            ui->textBrowser->append("Max file size in GCM mode is ~64GB before security failure.");
         if(item == "CCM")
             ui->textBrowser->append("Warning: CCM mode (L=4) has max file size of 4GB. Entire file is loaded into memory. Ensure you have enough memory available.\n");
         if(item == "SIV")
             ui->textBrowser->append("Warning: SIV mode loads entire file into memory. Ensure you have enough memory available.");
         if(item == "CTR" || item == "CBC" || item == "CFB" || item == "OFB")
-            ui->textBrowser->append(item+ ": This is an unauthenticated mode. If a cipher is used in this mode, and if it is the only cipher "
-                                    "used, or if it is the last cipher used in a chain, authentication will be added with HMAC-SHA256. "
-                                    "The authentication tag is 32 bytes and will be added to the end of the file.\n");
+            ui->textBrowser->append(item + ": This is an unauthenticated mode. If a cipher is used in this mode, and if it is the only cipher "
+                                                  "used, or if it is the last cipher used in a chain, authentication will be added with HMAC-SHA256. "
+                                                  "The authentication tag is 32 bytes and will be added to the end of the file.\n");
         if(item == "CTR")
             ui->textBrowser->append("The counter portion is set to 8 bytes for CTR. The allows for a maximum file size"
                                     " of approximately 2^64 blocks of data.\n");
@@ -103,6 +104,8 @@ MainWindow::MainWindow(QWidget *parent)
         updateLabels();
         setParams("");
     });
+
+    ui->textBrowser->append("Max file size in GCM mode is ~64GB before security failure.");
 }
 
 MainWindow::~MainWindow()
@@ -196,6 +199,7 @@ void MainWindow::run(std::string encryptToggle)
     Crypto* worker = new Crypto(nullptr, encryptToggle, password, inputFilePath, outputFilePath,
                                 pbkdf, memcost, timecost, threads, header, cipherList);
     QThread* thread = new QThread;
+
 
     worker->moveToThread(thread);
 

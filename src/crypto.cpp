@@ -86,7 +86,7 @@ void Crypto::run()
     if(mode == "192-bit") iv.resize(24);
     if(mode == "96-bit") iv.resize(12);
     if(mode == "64-bit") iv.resize(8);
-    if(mode == "CBC" || mode == "CTR" || mode == "CFB") iv.resize(Botan::BlockCipher::create(cipher)->block_size());
+    if(mode == "CBC" || mode == "CTR" || mode == "CFB" || mode == "OFB") iv.resize(Botan::BlockCipher::create(cipher)->block_size());
     std::string algostr = cipher + "/" + mode;
     if(cipher == "ChaCha20") algostr = "ChaCha20";
     if(cipher == "ChaCha20Poly1305") algostr = "ChaCha20Poly1305";
@@ -252,7 +252,7 @@ void Crypto::run()
 
             } catch(const Botan::Exception& e) {
                 emit sendMessage(QString(e.what()));
-                emit finished();
+                // emit finished();
                 return;
             }
 
