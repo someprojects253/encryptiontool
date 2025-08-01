@@ -24,6 +24,8 @@ void Crypto::deriveKey(std::vector<uint8_t> salt)
     size_t MiB = 1024;
     std::unique_ptr<Botan::PasswordHash> pwd_fam;
 
+    emit sendMessage("Deriving key.");
+
     //Botan for Scrypt and PBKDF2, libargon2 for Argon2
     try {
         if(pbkdf == "Argon2i" || pbkdf == "Argon2id" || pbkdf == "Argon2d") {
@@ -87,6 +89,7 @@ void Crypto::run()
     if(mode == "96-bit") iv.resize(12);
     if(mode == "64-bit") iv.resize(8);
     if(mode == "CBC" || mode == "CTR" || mode == "CFB" || mode == "OFB") iv.resize(Botan::BlockCipher::create(cipher)->block_size());
+
     std::string algostr = cipher + "/" + mode;
     if(cipher == "ChaCha20") algostr = "ChaCha20";
     if(cipher == "ChaCha20Poly1305") algostr = "ChaCha20Poly1305";
@@ -193,17 +196,29 @@ void Crypto::run()
     }
 
     //Load entire file into memory for SIV mode.
-    if(mode == "SIV") {
-        if(encryptToggle == "Decrypt")
-            buffer.resize(filesize - salt.size() - header.size());
-        else
-            buffer.resize(filesize);
-        inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
-        encAEAD->finish(buffer);
-        outputFileHandle.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
+    try {
+        if(mode == "SIV" || mode == "CCM(16,4)") {
+            if(encryptToggle == "Decrypt")
+            {
+                if(mode == "SIV")
+                    buffer.resize(filesize - salt.size() - header.size());
+                if(mode == "CCM(16,4)")
+                    buffer.resize(filesize - salt.size() - header.size() - iv.size());
+            }
+            else
+                buffer.resize(filesize);
+
+            inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
+            encAEAD->finish(buffer);
+            outputFileHandle.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
+            return;
+        }
+    }catch(const Botan::Exception& e) {
+        emit sendMessage(QString(e.what()));
         emit finished();
         return;
     }
+
 
     //Process file in chunks for modes other than SIV
     while(true)
