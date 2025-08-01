@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>MainWindow</string>
+   <string>Encryption tool</string>
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout_2">
@@ -131,6 +131,21 @@
           <item>
            <property name="text">
             <string>SHACAL2</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Blowfish</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>IDEA</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>3DES</string>
            </property>
           </item>
          </widget>

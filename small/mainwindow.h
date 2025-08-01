@@ -24,7 +24,8 @@ public:
     void run(std::string encryptToggle);
     void updateButtons();
     void getHeader();
-    void setParams();
+    void setParams(QString preset="");
+    void updateLabels();
 
 signals:
     void fileDropped();

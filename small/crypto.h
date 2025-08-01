@@ -13,6 +13,7 @@
 #include <botan/system_rng.h>
 #include <botan/mac.h>
 #include <botan/aead.h>
+#include <botan/block_cipher.h>
 #include <iostream>
 #include <fstream>
 #include <argon2.h>

@@ -1,8 +1,8 @@
 #include "crypto.h"
 
 Crypto::Crypto(QObject *parent, std::string encryptToggle, std::string cipher, std::string mode, std::string password,
-std::string inputFilePath, std::string outputFilePath, std::string pbkdf, size_t memcost, size_t timecost, size_t threads,
-std::string header)
+               std::string inputFilePath, std::string outputFilePath, std::string pbkdf, size_t memcost, size_t timecost, size_t threads,
+               std::string header)
     : QObject{parent}
 {
     this->encryptToggle = encryptToggle;
@@ -11,7 +11,6 @@ std::string header)
     this->password = password;
     this->inputFilePath = inputFilePath;
     this->outputFilePath = outputFilePath;
-
     this->pbkdf = pbkdf;
     this->memcost=memcost;
     this->timecost=timecost;
@@ -46,6 +45,7 @@ void Crypto::deriveKey(std::vector<uint8_t> salt)
         }
         if(pbkdf == "PBKDF2") {
             timecost = timecost * 1000;
+            pbkdf = "PBKDF2(HMAC(SHA-256))";
             pwd_fam = Botan::PasswordHashFamily::create_or_throw(pbkdf)->from_params(timecost);
         }
     } catch(const std::exception& e) {
@@ -54,7 +54,7 @@ void Crypto::deriveKey(std::vector<uint8_t> salt)
         return;
     }
 
-    if(pbkdf == "PBKDF2" || pbkdf == "Scrypt") pwd_fam->hash(key, password, salt);
+    if(pbkdf == "PBKDF2(HMAC(SHA-256))" || pbkdf == "Scrypt") pwd_fam->hash(key, password, salt);
     password = "";
 }
 
@@ -108,21 +108,17 @@ void Crypto::run()
     }
 
 
-    size_t totalBytesRead = 0;
     int lastPercent = -1;
-    std::vector<uint8_t> buffer(4096);
-    std::streamsize bytesRead;
-    bool isLastChunk;
-
     inputFileHandle.seekg(0, std::ios::end);
     size_t filesize = inputFileHandle.tellg();
     if(encryptToggle == "Encrypt") inputFileHandle.seekg(0, std::ios::beg);
     if(encryptToggle == "Decrypt") {
-       if(mode != "SIV") inputFileHandle.seekg(salt.size() + iv.size() + header.size(), std::ios::beg);
-       else inputFileHandle.seekg(salt.size() + header.size(), std::ios::beg);
+        if(mode != "SIV") inputFileHandle.seekg(salt.size() + iv.size() + header.size(), std::ios::beg);
+        else inputFileHandle.seekg(salt.size() + header.size(), std::ios::beg);
     }
 
     if(mode == "SIV") {
+        std::vector<uint8_t> buffer;
         if(encryptToggle == "Decrypt")
             buffer.resize(filesize - salt.size() - header.size());
         else
@@ -133,37 +129,41 @@ void Crypto::run()
         emit finished();
         return;
     }
-    while(true)
-    {
-            inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
 
-            bytesRead = inputFileHandle.gcount();
-            totalBytesRead += bytesRead;
-            if (bytesRead == 0)
-                break; // EOF
-            isLastChunk = inputFileHandle.eof();
+    size_t chunkSize = 4096;
+    size_t ciphertext_size;
+    size_t totalBytesRead = 0;
+    std::vector<uint8_t> buffer(chunkSize);
 
-            std::vector<uint8_t> chunk(buffer.begin(), buffer.begin() + bytesRead);
+    if(encryptToggle == "Decrypt")
+        ciphertext_size = filesize - header.size() - iv.size() - salt.size();
+    else
+        ciphertext_size = filesize;
 
-            try {
-                if(!isLastChunk) enc->update(chunk);
-
-                else enc->finish(chunk);
-
-                outputFileHandle.write(reinterpret_cast<const char*>(chunk.data()), chunk.size());
-
-            } catch(const Botan::Exception& e) {
-                emit sendMessage(QString(e.what()));
-                emit finished();
-                return;
-            }
-
-            int percent = static_cast<int>((100.0 * totalBytesRead) / filesize);
-            if (percent != lastPercent) {
-                emit progress(percent);
-                lastPercent = percent;
-            }
+    size_t chunks = (ciphertext_size - (ciphertext_size % chunkSize)) / chunkSize;
+    size_t lastchunkSize = ciphertext_size - (chunkSize * chunks);
+    if(lastchunkSize < enc->tag_size()){
+        chunks--;
+        lastchunkSize += chunkSize;
     }
+
+    for(size_t i = 0; i < chunks; i++){
+        inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), chunkSize);
+        totalBytesRead += inputFileHandle.gcount();
+        enc->update(buffer);
+        outputFileHandle.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
+
+        int percent = static_cast<int>((100.0 * totalBytesRead) / filesize);
+        if (percent != lastPercent) {
+            emit progress(percent);
+            lastPercent = percent;
+        }
+    }
+    buffer.resize(lastchunkSize);
+    inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), lastchunkSize);
+    enc->finish(buffer);
+    outputFileHandle.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
+
     inputFileHandle.close();
     outputFileHandle.close();
 

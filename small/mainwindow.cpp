@@ -21,25 +21,44 @@ MainWindow::MainWindow(QWidget *parent)
         ui->lineEdit_inputFile->setText(QString::fromStdString(inputFilePath));
         getHeader();
         updateButtons();
+        setParams("header");
     });
 
     connect(ui->comboBox_cipher, &QComboBox::currentTextChanged, this, [this] (QString item){
+        ui->textBrowser->clear();
         ui->comboBox_mode->clear();
-        if(item == "ChaCha20"){
-            ui->comboBox_mode->addItems({"192-bit", "96-bit", "64-bit"});
-            ui->comboBox_mode->setToolTip("This refers to the nonce size. 64-bit allows for larger files (exabytes).\n"
-                                          "96-bit and 192-bit have smaller file size limit (256GiB) but lower chance of nonce reuse.\n"
-                                          "ChaCha20 is always used with Poly1305.");
-        } else if(item != "SHACAL2" && item != "Threefish-512"){
+        // 128-bit block ciphers
+        if(item == "AES" || item == "Serpent" || item == "Twofish" || item == "Camellia" || item == "Kuznyechik" || item == "SM4")
             ui->comboBox_mode->addItems({"GCM", "OCB", "EAX", "SIV"});
-            ui->comboBox_mode->setToolTip("");
-        } else {
+        // Wide block ciphers
+        if (item == "SHACAL2" || item == "Threefish-512")
             ui->comboBox_mode->addItems({"OCB", "EAX"});
-            ui->comboBox_mode->setToolTip("");
+        // 64-bit block ciphers
+        if (item == "Blowfish" || item == "IDEA" || item == "3DES") {
+            ui->comboBox_mode->addItems({"EAX"});
+            ui->textBrowser->append(item + ": This is a 64-bit block cipher. Recommended not to encrypt more than "
+                                           "4GB with this cipher.\n");
+        }
+        if (item == "ChaCha20"){
+            ui->comboBox_mode->addItems({"192-bit", "96-bit", "64-bit"});
+            ui->textBrowser->append("ChaCha20 will be used with Poly1305. "
+                                    "The number of bits refers to the nonce size. 64-bit has a higher proabability of nonce reuse but "
+                                    "a higher file size limit (exabytes). 96-bit and 192-bit nonces have a lower probability of nonce reuse "
+                                    "but a lower file size limit (256GB). ChaCha20 with a 192-bit nonce is XChaCha20.\n");
         }
     });
 
-    connect (ui->comboBox_PBKDF, &QComboBox::currentTextChanged, this, &MainWindow::updateLabels);
+    connect(ui->comboBox_mode, &QComboBox::currentTextChanged, this, [this] (QString item) {
+        if(item == "GCM")
+            ui->textBrowser->append("Max file size in GCM mode is ~64GB before security failure.");
+        if(item == "SIV")
+            ui->textBrowser->append("Warning: SIV mode loads entire file into memory. Ensure you have enough memory available.");
+    });
+    
+    connect (ui->comboBox_PBKDF, &QComboBox::currentTextChanged, this, [this]() {
+        updateLabels();
+        setParams();
+    });
 
     connect(ui->checkBox_showPassword, &QCheckBox::checkStateChanged, this, [this](const Qt::CheckState& checkState) {
         if(checkState == Qt::Checked){
@@ -82,6 +101,7 @@ void MainWindow::run(std::string encryptToggle)
     size_t threads = ui->lineEdit_threads->text().toUInt();
 
     if(cipher == "AES") cipher = "AES-256";
+    if(cipher == "Camellia") cipher = "Camellia-256";
 
     if(encryptToggle == "Encrypt") {
         outputFilePath = inputFilePath + ".enc";
@@ -118,6 +138,7 @@ void MainWindow::run(std::string encryptToggle)
         size_t pos = edited.find(to_remove);
         if (pos != std::string::npos) {
             edited.erase(pos, to_remove.length());
+            edited += "_decrypted";
         } else {
             edited += "_decrypted";
         }
@@ -151,6 +172,8 @@ void MainWindow::run(std::string encryptToggle)
     ui->pushButton_Encrypt->setEnabled(false);
     ui->pushButton_Decrypt->setEnabled(false);
 
+    ui->lineEdit_Password->clear();
+    ui->lineEdit_confirmPassword->clear();
     thread->start();
 }
 
@@ -196,11 +219,29 @@ void MainWindow::getHeader()
     std::string fullHeader = headerStream.str();
     ui->textBrowser->append("Header found: \n" + QString::fromStdString(fullHeader));
     this->header = fullHeader;  // Assuming `header` is a member variable
-    setParams();
 }
 
-void MainWindow::setParams()
+void MainWindow::setParams(QString preset)
 {
+    if(preset != "header") {
+        QString pbkdf = ui->comboBox_PBKDF->currentText();
+        if(pbkdf == "PBKDF2") {
+            ui->lineEdit_memcost->setText("0");
+            ui->lineEdit_threads->setText("0");
+            ui->lineEdit_timecost->setText("600");
+        } else if (pbkdf == "Scrypt") {
+            ui->lineEdit_threads->setText("1");
+            ui->lineEdit_memcost->setText("8");
+            ui->lineEdit_timecost->setText("20");
+        } else { // Argon2
+            ui->lineEdit_threads->setText("1");
+            ui->lineEdit_memcost->setText("2048");
+            ui->lineEdit_timecost->setText("1");
+        }
+        return;
+    }
+
+
     std::istringstream stream(header);
     std::string line;
 
