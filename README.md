@@ -14,4 +14,6 @@ Supported unauthenticated modes: CBC, CTR, CFB, OFB. Authenticated with HMAC-SHA
 
 Supported PBKDFs: Argon2id, Argon2d, Argon2i, PBKDF2, Scrypt
 
+bugs: Crashes when chaining authenticated modes. No reason to use an authenticated mode more than once when chaining but the bug is there. 
+
 ![Screenshot_20250705_234309](https://github.com/user-attachments/assets/ab9e5620-7c0e-4655-af27-e67c362f2ade)
