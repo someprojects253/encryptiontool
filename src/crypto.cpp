@@ -100,6 +100,7 @@ void Crypto::run()
     if(!isAEAD) hmac = Botan::MessageAuthenticationCode::create_or_throw("HMAC(SHA-256)");
 
     emit sendMessage(QString::fromStdString(algostr));
+    std::cout << algostr << std::endl;
 
     // For encryption, write header and salt only for final encryption in chain.
     if(encryptToggle == "Encrypt") {
@@ -125,6 +126,7 @@ void Crypto::run()
         if(isAEAD){
             encAEAD = Botan::AEAD_Mode::create_or_throw(algostr, dir);
             cipher_key.resize(encAEAD->maximum_keylength());
+            std::cout << "Maximum key length: " << encAEAD->maximum_keylength() << std::endl;
 
             if(encryptToggle == "Encrypt") {
                 cipher_key.assign(key.begin(), key.begin() + cipher_key.size());
@@ -140,7 +142,7 @@ void Crypto::run()
             if(mode != "SIV") encAEAD->start(iv);
         } else {
             enc = Botan::Cipher_Mode::create_or_throw(algostr, dir);
-            emit sendMessage(QString::number(enc->maximum_keylength()));
+            // emit sendMessage(QString::number(enc->maximum_keylength()));
             cipher_key.resize(enc->maximum_keylength());
 
             if(isOuter) {
@@ -175,7 +177,7 @@ void Crypto::run()
         return;
     }
 
-    size_t totalBytesRead = 0;
+    // size_t totalBytesRead = 0;
     int lastPercent = -1;
     std::vector<uint8_t> buffer(4096);
     std::streamsize bytesRead;
@@ -193,6 +195,7 @@ void Crypto::run()
             else inputFileHandle.seekg(iv.size(), std::ios::beg);
        }
        else inputFileHandle.seekg(salt.size() + header.size(), std::ios::beg);
+       // if(isAEAD) buffer.resize(4096 + enc->tag_size());
     }
 
     //Load entire file into memory for SIV mode.
@@ -218,69 +221,89 @@ void Crypto::run()
         emit finished();
         return;
     }
+    size_t chunkSize = 4096;
+    size_t ciphertext_size;
+    size_t totalBytesRead = 0;
+    size_t tagsize;
+    if(isAEAD) tagsize = encAEAD->tag_size();
+    else tagsize = 32;
 
+    if(encryptToggle == "Encrypt"){
+        ciphertext_size = filesize;
+    } else  {
+        ciphertext_size = filesize - header.size() - iv.size() - salt.size();
+        size_t remainder = ciphertext_size % chunkSize;
+        if(remainder < tagsize){
+            inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), remainder);
+            std::vector<uint8_t> chunk(buffer.begin(), buffer.begin() + inputFileHandle.gcount());
 
-    //Process file in chunks for modes other than SIV
-    while(true)
-    {
-            inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
+            if(isAEAD) encAEAD->update(chunk);
+            else {
+                if(isOuter && encryptToggle == "Decrypt") hmac->update(chunk);
+                enc->update(chunk);
+                if(isOuter && encryptToggle == "Encrypt") hmac->update(chunk);
+            }
 
-            bytesRead = inputFileHandle.gcount();
-            totalBytesRead += bytesRead;
-            if (bytesRead == 0)
-                break; // EOF
-            isLastChunk = inputFileHandle.eof();
+            outputFileHandle.write(reinterpret_cast<const char*>(chunk.data()), chunk.size());
+        }
+    }
 
-            std::vector<uint8_t> chunk(buffer.begin(), buffer.begin() + bytesRead);
+    while(true){
+        inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
 
-            try {
-                if(!isLastChunk) {
-                    if(isAEAD) encAEAD->update(chunk);
-                    else {
-                        if(encryptToggle == "Decrypt" && isOuter) hmac->update(chunk);
-                        enc->update(chunk);
-                        if(encryptToggle == "Encrypt" && isOuter) hmac->update(chunk);
+        size_t bytesRead = inputFileHandle.gcount();
+        totalBytesRead += bytesRead;
+        if (bytesRead == 0) break;
+
+        std::vector<uint8_t> chunk(buffer.begin(), buffer.begin() + bytesRead);
+
+        try {
+            if(inputFileHandle.eof() || inputFileHandle.peek() == EOF){
+                Botan::secure_vector<uint8_t> out(chunk.begin(), chunk.end());
+                if(isAEAD) {
+                    encAEAD->finish(out);
+                } else {
+                    if(isOuter && encryptToggle == "Decrypt"){
+                        std::vector<uint8_t> checktag(out.end() - 32, out.end());
+                        out.resize(out.size() - 32);
+                        hmac->update(out);
+                        hmac->final(hmac_tag);
+
+                        if(checktag != hmac_tag){
+                            emit sendMessage("Authenitcation failed.");
+                        } else {
+                            emit sendMessage("Authentication succeeded.");
+                        }
                     }
-                } else { // last chunk
-                    if(isAEAD) encAEAD->finish(chunk);
-                    else {
-                        if(encryptToggle == "Decrypt" && isOuter){
-                            std::vector<uint8_t> tagcheck(chunk.end() - 32, chunk.end());
-                            chunk.resize(chunk.size()- 32);
-                            hmac->update(chunk);
-                            hmac->final(hmac_tag);
-
-                            if(hmac_tag != tagcheck)
-                                emit sendMessage("Authentication failed.");
-                            else
-                                emit sendMessage("Authentication successful.");
-                        }
-                        enc->finish(chunk);
-                        if(encryptToggle == "Encrypt" && isOuter) {
-                            hmac->update(chunk);
-                            hmac->final(hmac_tag);
-                        }
+                    enc->finish(out);
+                    if(isOuter && encryptToggle == "Encrypt"){
+                        hmac->update(out);
+                        hmac->final(hmac_tag);
                     }
                 }
-
+                outputFileHandle.write(reinterpret_cast<const char*>(out.data()), out.size());
+            } else {
+                if(isAEAD) encAEAD->update(chunk);
+                else {
+                    if(isOuter && encryptToggle == "Decrypt") hmac->update(chunk);
+                    enc->update(chunk);
+                    if(isOuter && encryptToggle == "Encrypt") hmac->update(chunk);
+                }
                 outputFileHandle.write(reinterpret_cast<const char*>(chunk.data()), chunk.size());
-
-            } catch(const Botan::Exception& e) {
-                emit sendMessage(QString(e.what()));
-                // emit finished();
-                return;
             }
 
-            int percent = static_cast<int>((100.0 * totalBytesRead) / filesize);
-            if (percent != lastPercent) {
-                emit progress(percent);
-                lastPercent = percent;
-            }
+        } catch(const Botan::Exception& e) {
+            emit sendMessage(QString::fromStdString(e.what()));
+            return;
+        }
+
+        int percent = static_cast<int>((100.0 * totalBytesRead) / filesize);
+        if (percent != lastPercent) {
+            emit progress(percent);
+            lastPercent = percent;
+        }
     }
-    //Awkward placement, but MAC tag must be written to end of file.
-    if(!isAEAD) {
-        if(encryptToggle == "Encrypt" && isOuter) outputFileHandle.write(reinterpret_cast<const char*>(hmac_tag.data()), hmac_tag.size());
-    }
+    if(!isAEAD && encryptToggle == "Encrypt") outputFileHandle.write(reinterpret_cast<const char*>(hmac_tag.data()), hmac_tag.size());
     inputFileHandle.close();
     outputFileHandle.close();
 }
@@ -322,7 +345,8 @@ void Crypto::start()
             mode = item.substr(pos + 1);
         }
         bool isAEAD = (!(mode == "CBC" || mode == "CTR" || mode == "CFB" || mode == "OFB"));
-        if(mode == "CTR") algostr = "CTR-BE(" + cipher + ",4)";
+        if(mode == "CTR") algostr = "CTR-BE(" + cipher + ",8)";
+        if(mode == "OFB") algostr = "OFB(" + cipher + ")";
         if(cipher == "ChaCha20" || cipher == "ChaCha20Poly1305") algostr = "ChaCha20";
         keysize += Botan::Cipher_Mode::create_or_throw(algostr, dir)->maximum_keylength();
         bool isOuter = ((encryptToggle == "Encrypt" && i == cipherList.size()-1)) || (encryptToggle == "Decrypt" && i == 0);
@@ -347,6 +371,8 @@ void Crypto::start()
             outputFilePath = fileList[i];
         }
         run();
+        if(cipherList.size() == initialListSize && encryptToggle == "Decrypt")
+            header.clear();
         inputFilePath = outputFilePath;
         cipherList.erase(cipherList.begin());
     }
