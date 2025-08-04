@@ -65,67 +65,116 @@ void Crypto::run()
     std::vector<uint8_t> iv;
 
     if(mode == "GCM" || mode == "SIV") iv.resize(12);
+    if(mode == "CCM"){
+        iv.resize(11);
+        mode = "CCM(16,4)";
+    }
     if(mode == "OCB") iv.resize(15);
+    if(mode == "CBC" || mode == "CTR" || mode == "CFB" || mode == "OFB") iv.resize(Botan::BlockCipher::create_or_throw(cipher)->block_size());
     if(mode == "EAX") iv.resize(key.size()); // maybe needs adjusting for shacal2
     if(mode == "192-bit") iv.resize(24);
     if(mode == "96-bit") iv.resize(12);
     if(mode == "64-bit") iv.resize(8);
-    std::unique_ptr<Botan::AEAD_Mode> enc;
+    std::unique_ptr<Botan::AEAD_Mode> encAEAD;
+    std::unique_ptr<Botan::Cipher_Mode> enc;
+    std::unique_ptr<Botan::MessageAuthenticationCode> hmac;
+    Botan::Cipher_Dir dir;
+    std::vector<uint8_t> hmac_tag(32);
     std::string algostr = cipher + "/" + mode;
+
     if(cipher == "ChaCha20") algostr = "ChaCha20Poly1305";
+    if(mode == "CTR") algostr = "CTR-BE(" + cipher +",8)";
+    if(mode == "OFB") algostr = "OFB(" + cipher + ")";
     std::string_view algostrview = algostr;
 
+    bool isAEAD = (mode == "GCM" || mode == "OCB" || mode == "EAX" || mode == "SIV" || mode == "CCM(16,4)");
 
     std::ifstream inputFileHandle(inputFilePath, std::ios::binary);
     std::ofstream outputFileHandle(outputFilePath, std::ios::binary);
     if(encryptToggle == "Encrypt") {
-        enc = Botan::AEAD_Mode::create_or_throw(algostrview, Botan::Cipher_Dir::Encryption);
+        dir = Botan::Cipher_Dir::Encryption;
         salt = rng.random_vec<std::vector<uint8_t>>(32);
         iv = rng.random_vec<std::vector<uint8_t>>(iv.size());
         if(header.size() > 0) outputFileHandle.write(reinterpret_cast<char*>(header.data()), header.size());
         outputFileHandle.write(reinterpret_cast<char*>(salt.data()), salt.size());
-        if(mode != "SIV") outputFileHandle.write(reinterpret_cast<char*>(iv.data()), iv.size());
+        outputFileHandle.write(reinterpret_cast<char*>(iv.data()), iv.size());
     }
     if(encryptToggle == "Decrypt") {
-        enc = Botan::AEAD_Mode::create_or_throw(algostrview, Botan::Cipher_Dir::Decryption);
+        dir = Botan::Cipher_Dir::Decryption;
         inputFileHandle.seekg(header.size(), std::ios::beg);
         inputFileHandle.read(reinterpret_cast<char*>(salt.data()), salt.size());
-        if(mode != "SIV") inputFileHandle.read(reinterpret_cast<char*>(iv.data()), iv.size());
+        inputFileHandle.read(reinterpret_cast<char*>(iv.data()), iv.size());
     }
 
-    key.resize(enc->maximum_keylength());
+    if(isAEAD) encAEAD = Botan::AEAD_Mode::create_or_throw(algostrview, dir);
+    else enc = Botan::Cipher_Mode::create_or_throw(algostrview, dir);
+
+    if(isAEAD) key.resize(encAEAD->maximum_keylength());
+    else key.resize(enc->maximum_keylength());
+
     deriveKey(salt);
 
     try {
-        enc->set_key(key);
-        std::span<uint8_t> associated_data(reinterpret_cast<uint8_t*>(header.data()), header.size());
-        if(header.size() > 0) enc->set_associated_data(associated_data);
-        if(mode != "SIV") enc->start(iv);
+        if(isAEAD) {
+            encAEAD->set_key(key);
+            std::span<uint8_t> associated_data(reinterpret_cast<uint8_t*>(header.data()), header.size());
+            if(header.size() > 0) encAEAD->set_associated_data(associated_data);
+            encAEAD->start(iv);
+        } else {
+            Botan::secure_vector<uint8_t> mac_key;
+            hmac = Botan::MessageAuthenticationCode::create_or_throw("HMAC(SHA-256)");
+            auto kdf = Botan::KDF::create_or_throw("HKDF(SHA-256)");
+            mac_key = kdf->derive_key(32, key);
+            enc->set_key(key);
+            enc->start(iv);
+            hmac->set_key(mac_key);
+            if(header.size() > 0) hmac->update(header);
+            hmac->update(salt);
+            hmac->update(iv);
+        }
     } catch(const Botan::Exception& e) {
         emit sendMessage(QString(e.what()));
         emit finished();
         return;
     }
 
-
     int lastPercent = -1;
     inputFileHandle.seekg(0, std::ios::end);
     size_t filesize = inputFileHandle.tellg();
     if(encryptToggle == "Encrypt") inputFileHandle.seekg(0, std::ios::beg);
     if(encryptToggle == "Decrypt") {
-        if(mode != "SIV") inputFileHandle.seekg(salt.size() + iv.size() + header.size(), std::ios::beg);
-        else inputFileHandle.seekg(salt.size() + header.size(), std::ios::beg);
+        inputFileHandle.seekg(salt.size() + iv.size() + header.size(), std::ios::beg);
     }
 
-    if(mode == "SIV") {
+    if(mode == "SIV" || mode == "CCM(16,4)" || filesize < 4096) {
         std::vector<uint8_t> buffer;
-        if(encryptToggle == "Decrypt")
-            buffer.resize(filesize - salt.size() - header.size());
-        else
-            buffer.resize(filesize);
+
+        if(encryptToggle == "Decrypt") buffer.resize(filesize - salt.size() - header.size() - iv.size());
+        else buffer.resize(filesize);
         inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
-        enc->finish(buffer);
+
+        if(isAEAD) {
+            encAEAD->finish(buffer);
+        } else {
+            if(encryptToggle == "Decrypt"){
+                hmac->update(buffer);
+                hmac->final(hmac_tag);
+                std::vector<uint8_t> checktag(buffer.end()-32, buffer.end());
+                buffer.resize(buffer.size()-32);
+                if(checktag == hmac_tag)
+                    emit sendMessage("Authentication successful.");
+                else
+                    emit sendMessage("Authentication failed.");
+            }
+            enc->finish(buffer);
+            if(encryptToggle == "Encrypt"){
+                hmac->update(buffer);
+                hmac->final(hmac_tag);
+            }
+        }
         outputFileHandle.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
+        if(!isAEAD && encryptToggle == "Encrypt") outputFileHandle.write(reinterpret_cast<const char*>(hmac_tag.data()), hmac_tag.size());
+
         emit finished();
         return;
     }
@@ -135,23 +184,77 @@ void Crypto::run()
     size_t totalBytesRead = 0;
     std::vector<uint8_t> buffer(chunkSize);
 
-    if(encryptToggle == "Decrypt")
-        ciphertext_size = filesize - header.size() - iv.size() - salt.size();
-    else
+    if(encryptToggle == "Encrypt"){
         ciphertext_size = filesize;
-
-    size_t chunks = (ciphertext_size - (ciphertext_size % chunkSize)) / chunkSize;
-    size_t lastchunkSize = ciphertext_size - (chunkSize * chunks);
-    if(lastchunkSize < enc->tag_size()){
-        chunks--;
-        lastchunkSize += chunkSize;
+    } else  {
+        ciphertext_size = filesize - header.size() - iv.size() - salt.size();
+        size_t remainder = ciphertext_size % chunkSize;
+        if(remainder > 0 && mode != "OCB"){
+            inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), remainder);
+            std::vector<uint8_t> chunk(buffer.begin(), buffer.begin() + inputFileHandle.gcount());
+            if(isAEAD){
+                encAEAD->update(chunk);
+            }
+            else {
+                if(encryptToggle == "Decrypt") hmac->update(chunk);
+                enc->update(chunk);
+                if(encryptToggle == "Encrypt") hmac->update(chunk);
+            }
+            outputFileHandle.write(reinterpret_cast<const char*>(chunk.data()), chunk.size());
+        }
     }
 
-    for(size_t i = 0; i < chunks; i++){
-        inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), chunkSize);
-        totalBytesRead += inputFileHandle.gcount();
-        enc->update(buffer);
-        outputFileHandle.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
+    while(true){
+        inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
+
+        size_t bytesRead = inputFileHandle.gcount();
+        totalBytesRead += bytesRead;
+        if (bytesRead == 0) break;
+
+        std::vector<uint8_t> chunk(buffer.begin(), buffer.begin() + bytesRead);
+
+        try {
+            if(inputFileHandle.eof() || inputFileHandle.peek() == EOF){
+                emit sendMessage(QString::number(bytesRead));
+                Botan::secure_vector<uint8_t> out(chunk.begin(), chunk.end());
+                if(isAEAD){
+                    encAEAD->finish(out);  // tag is verified and removed
+                }
+                else{
+                    if(encryptToggle == "Decrypt"){
+                        std::vector<uint8_t> checktag(out.end() - 32, out.end());
+                        out.resize(out.size() - 32);
+                        hmac->update(out);
+                        hmac->final(hmac_tag);
+                        if(checktag != hmac_tag){
+                            emit sendMessage("Authenitcation failed.");
+                        } else {
+                            emit sendMessage("Authentication succeeded.");
+                        }
+                    }
+                    enc->finish(out);
+                    if(encryptToggle == "Encrypt") {
+                        hmac->update(out);
+                        hmac->final(hmac_tag);
+                    }
+                }
+                outputFileHandle.write(reinterpret_cast<const char*>(out.data()), out.size());
+            } else {
+                if(isAEAD){
+                    encAEAD->update(chunk);
+                }
+                else{
+                    if(encryptToggle == "Decrypt") hmac->update(chunk);
+                    enc->update(chunk);
+                    if(encryptToggle == "Encrypt") hmac->update(chunk);
+                }
+                outputFileHandle.write(reinterpret_cast<const char*>(chunk.data()), chunk.size());
+            }
+
+        } catch(const Botan::Exception& e) {
+            emit sendMessage(QString::fromStdString(e.what()));
+            return;
+        }
 
         int percent = static_cast<int>((100.0 * totalBytesRead) / filesize);
         if (percent != lastPercent) {
@@ -159,10 +262,9 @@ void Crypto::run()
             lastPercent = percent;
         }
     }
-    buffer.resize(lastchunkSize);
-    inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), lastchunkSize);
-    enc->finish(buffer);
-    outputFileHandle.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
+
+    if(!isAEAD && encryptToggle == "Encrypt") outputFileHandle.write(reinterpret_cast<const char*>(hmac_tag.data()), hmac_tag.size());
+
 
     inputFileHandle.close();
     outputFileHandle.close();

@@ -84,6 +84,31 @@
             <string>SIV</string>
            </property>
           </item>
+          <item>
+           <property name="text">
+            <string>CCM</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>CBC</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>CTR</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>OFB</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>CFB</string>
+           </property>
+          </item>
          </widget>
         </item>
         <item>

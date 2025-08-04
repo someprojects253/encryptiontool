@@ -29,13 +29,13 @@ MainWindow::MainWindow(QWidget *parent)
         ui->comboBox_mode->clear();
         // 128-bit block ciphers
         if(item == "AES" || item == "Serpent" || item == "Twofish" || item == "Camellia" || item == "Kuznyechik" || item == "SM4")
-            ui->comboBox_mode->addItems({"GCM", "OCB", "EAX", "SIV"});
+            ui->comboBox_mode->addItems({"GCM", "OCB", "EAX", "SIV", "CCM", "CBC", "CTR", "OFB", "CFB"});
         // Wide block ciphers
         if (item == "SHACAL2" || item == "Threefish-512")
-            ui->comboBox_mode->addItems({"OCB", "EAX"});
+            ui->comboBox_mode->addItems({"OCB", "EAX", "CBC", "CTR", "OFB", "CFB"});
         // 64-bit block ciphers
         if (item == "Blowfish" || item == "IDEA" || item == "3DES") {
-            ui->comboBox_mode->addItems({"EAX"});
+            ui->comboBox_mode->addItems({"EAX", "CBC", "CTR", "OFB", "CFB"});
             ui->textBrowser->append(item + ": This is a 64-bit block cipher. Recommended not to encrypt more than "
                                            "4GB with this cipher.\n");
         }
@@ -235,8 +235,8 @@ void MainWindow::setParams(QString preset)
             ui->lineEdit_timecost->setText("20");
         } else { // Argon2
             ui->lineEdit_threads->setText("1");
-            ui->lineEdit_memcost->setText("2048");
-            ui->lineEdit_timecost->setText("1");
+            ui->lineEdit_memcost->setText("1024");
+            ui->lineEdit_timecost->setText("4");
         }
         return;
     }
