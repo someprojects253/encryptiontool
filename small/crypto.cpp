@@ -117,8 +117,11 @@ void Crypto::run()
     try {
         if(isAEAD) {
             encAEAD->set_key(key);
-            std::span<uint8_t> associated_data(reinterpret_cast<uint8_t*>(header.data()), header.size());
-            if(header.size() > 0) encAEAD->set_associated_data(associated_data);
+            std::vector<uint8_t> associated_data(header.size()+salt.size()+iv.size());
+            if(header.size() > 0) associated_data.insert(associated_data.end(), header.begin(), header.end());
+            associated_data.insert(associated_data.end(), salt.begin(), salt.end());
+            associated_data.insert(associated_data.end(), iv.begin(), iv.end());
+            encAEAD->set_associated_data(associated_data);
             encAEAD->start(iv);
         } else {
             Botan::secure_vector<uint8_t> mac_key;
