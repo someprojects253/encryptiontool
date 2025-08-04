@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>466</width>
+    <width>453</width>
     <height>504</height>
    </rect>
   </property>
@@ -71,16 +71,6 @@
           </item>
           <item>
            <property name="text">
-            <string>CBC</string>
-           </property>
-          </item>
-          <item>
-           <property name="text">
-            <string>CTR</string>
-           </property>
-          </item>
-          <item>
-           <property name="text">
             <string>OCB</string>
            </property>
           </item>
@@ -101,12 +91,22 @@
           </item>
           <item>
            <property name="text">
-            <string>CFB</string>
+            <string>CBC</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>CTR</string>
            </property>
           </item>
           <item>
            <property name="text">
             <string>OFB</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>CFB</string>
            </property>
           </item>
          </widget>
@@ -208,46 +208,6 @@
        </layout>
       </item>
       <item>
-       <layout class="QHBoxLayout" name="horizontalLayout_9">
-        <item>
-         <widget class="QCheckBox" name="checkBox_chain">
-          <property name="text">
-           <string>Chain</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="pushButton_addCipher">
-          <property name="maximumSize">
-           <size>
-            <width>30</width>
-            <height>16777215</height>
-           </size>
-          </property>
-          <property name="text">
-           <string>+</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="pushButton_removeCipher">
-          <property name="maximumSize">
-           <size>
-            <width>30</width>
-            <height>16777215</height>
-           </size>
-          </property>
-          <property name="text">
-           <string>-</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QLineEdit" name="lineEdit_cipherList"/>
-        </item>
-       </layout>
-      </item>
-      <item>
        <layout class="QHBoxLayout" name="horizontalLayout_4">
         <item>
          <widget class="QLabel" name="label_inputFile">
@@ -314,7 +274,7 @@
              </size>
             </property>
             <property name="text">
-             <string>2048</string>
+             <string>1024</string>
             </property>
            </widget>
           </item>
@@ -333,7 +293,7 @@
            <widget class="QLineEdit" name="lineEdit_timecost">
             <property name="maximumSize">
              <size>
-              <width>50</width>
+              <width>30</width>
               <height>16777215</height>
              </size>
             </property>
@@ -389,7 +349,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>466</width>
+     <width>453</width>
      <height>23</height>
     </rect>
    </property>
