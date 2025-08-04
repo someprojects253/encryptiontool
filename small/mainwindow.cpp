@@ -234,9 +234,9 @@ void MainWindow::setParams(QString preset)
             ui->lineEdit_memcost->setText("8");
             ui->lineEdit_timecost->setText("20");
         } else { // Argon2
-            ui->lineEdit_threads->setText("1");
+            ui->lineEdit_threads->setText("4");
             ui->lineEdit_memcost->setText("1024");
-            ui->lineEdit_timecost->setText("4");
+            ui->lineEdit_timecost->setText("1");
         }
         return;
     }
