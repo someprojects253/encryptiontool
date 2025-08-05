@@ -69,6 +69,7 @@ void Crypto::run()
         iv.resize(11);
         mode = "CCM(16,4)";
     }
+    // if(mode == "CBC") mode = "CBC/PKCS7";
     if(mode == "OCB") iv.resize(15);
     if(mode == "CBC" || mode == "CTR" || mode == "CFB" || mode == "OFB") iv.resize(Botan::BlockCipher::create_or_throw(cipher)->block_size());
     if(mode == "EAX") iv.resize(key.size()); // maybe needs adjusting for shacal2
@@ -87,7 +88,8 @@ void Crypto::run()
     if(mode == "OFB") algostr = "OFB(" + cipher + ")";
     std::string_view algostrview = algostr;
 
-    bool isAEAD = (mode == "GCM" || mode == "OCB" || mode == "EAX" || mode == "SIV" || mode == "CCM(16,4)");
+    bool isAEAD = (mode == "GCM" || mode == "SIV" || mode == "OCB" || mode == "CCM(16,4)" || mode == "EAX" || cipher == "ChaCha20Poly1305");
+
 
     std::ifstream inputFileHandle(inputFilePath, std::ios::binary);
     std::ofstream outputFileHandle(outputFilePath, std::ios::binary);
@@ -191,7 +193,10 @@ void Crypto::run()
         ciphertext_size = filesize;
     } else  {
         ciphertext_size = filesize - header.size() - iv.size() - salt.size();
+        std::cout << ciphertext_size << std::flush;
+        size_t blocksize = Botan::BlockCipher::create_or_throw(cipher)->block_size();
         size_t remainder = ciphertext_size % chunkSize;
+        if(mode == "CBC") remainder = blocksize;
         if(remainder > 0 && mode != "OCB"){
             inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), remainder);
             std::vector<uint8_t> chunk(buffer.begin(), buffer.begin() + inputFileHandle.gcount());
