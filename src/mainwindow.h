@@ -6,6 +6,8 @@
 #include <QThread>
 #include <QDropEvent>
 #include <QMimeData>
+#include <QStringList>
+#include <QString>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -24,8 +26,9 @@ public:
     void run(std::string encryptToggle);
     void updateButtons();
     void getHeader();
-    void setParams(QString preset="");
+    void setParams(std::string preset);
     void updateLabels();
+    void updateCipherList(QString addToggle);
 
 signals:
     void fileDropped();
@@ -47,5 +50,6 @@ private:
     Ui::MainWindow *ui;
     QString localFilePath;
     std::string inputFilePath, outputFilePath, header;
+    std::vector<std::string> cipherList;
 };
 #endif // MAINWINDOW_H
