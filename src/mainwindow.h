@@ -29,6 +29,7 @@ public:
     void setParams(std::string preset);
     void updateLabels();
     void updateCipherList(QString addToggle);
+    void updateComboBox(QString item);
 
 signals:
     void fileDropped();

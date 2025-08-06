@@ -61,27 +61,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Information about ciphers and modes. Add and remove modes based on ciphers.
     connect(ui->comboBox_cipher, &QComboBox::currentTextChanged, this, [this] (QString item){
-        ui->textBrowser->clear();
-        ui->comboBox_mode->clear();
-        // 128-bit block ciphers
-        if(item == "AES" || item == "Serpent" || item == "Twofish" || item == "Camellia" || item == "Kuznyechik" || item == "SM4")
-            ui->comboBox_mode->addItems({"GCM", "CTR", "CBC", "OCB", "EAX", "SIV", "CCM", "CFB", "OFB"});
-        // Wide block ciphers
-        if (item == "SHACAL2" || item == "Threefish-512")
-            ui->comboBox_mode->addItems({"CTR", "CBC", "OCB", "EAX", "CFB", "OFB"});
-        // 64-bit block ciphers
-        if (item == "Blowfish" || item == "IDEA" || item == "3DES") {
-            ui->comboBox_mode->addItems({"CTR", "CBC", "CFB", "OFB", "EAX"});
-            ui->textBrowser->append(item + ": This is a 64-bit block cipher. Recommended not to encrypt more than "
-                                           "4GB with this cipher.\n");
-        }
-        if (item == "ChaCha20"){
-            ui->comboBox_mode->addItems({"192-bit", "96-bit", "64-bit"});
-            ui->textBrowser->append("ChaCha20 will be used with Poly1305 if it is the only cipher used or if it is the last cipher used in a chain. "
-                                    "The number of bits refers to the nonce size. 64-bit has a higher proabability of nonce reuse but "
-                                    "a higher file size limit (exabytes). 96-bit and 192-bit nonces have a lower probability of nonce reuse "
-                                    "but a lower file size limit (256GB). ChaCha20 with a 192-bit nonce is XChaCha20.\n");
-        }
+        updateComboBox(item);
     });
 
     connect(ui->comboBox_mode, &QComboBox::currentTextChanged, this, [this] (QString item) {
@@ -112,6 +92,36 @@ MainWindow::MainWindow(QWidget *parent)
 MainWindow::~MainWindow()
 {
     delete ui;
+}
+
+void MainWindow::updateComboBox(QString item)
+{
+    ui->textBrowser->clear();
+    ui->comboBox_mode->clear();
+    // 128-bit block ciphers
+    if(item == "AES" || item == "Serpent" || item == "Twofish" || item == "Camellia" || item == "Kuznyechik" || item == "SM4"){
+        if(cipherList.size() == 0) ui->comboBox_mode->addItems({"GCM", "CTR", "CBC", "OCB", "EAX", "SIV", "CCM", "CFB", "OFB"});
+        else ui->comboBox_mode->addItems({"CTR", "CBC", "CFB", "OFB"});
+    }
+    // Wide block ciphers
+    if (item == "SHACAL2" || item == "Threefish-512"){
+        if(cipherList.size() == 0) ui->comboBox_mode->addItems({"CTR", "CBC", "OCB", "EAX", "CFB", "OFB"});
+        else ui->comboBox_mode->addItems({"CTR", "CBC", "CFB", "OFB"});
+    }
+    // 64-bit block ciphers
+    if (item == "Blowfish" || item == "IDEA" || item == "3DES") {
+        if(cipherList.size() == 0) ui->comboBox_mode->addItems({"EAX", "CTR", "CBC", "CFB", "OFB"});
+        else ui->comboBox_mode->addItems({"CTR", "CBC", "CFB", "OFB"});
+        ui->textBrowser->append(item + ": This is a 64-bit block cipher. Recommended not to encrypt more than "
+                                       "4GB with this cipher.\n");
+    }
+    if (item == "ChaCha20"){
+        ui->comboBox_mode->addItems({"192-bit", "96-bit", "64-bit"});
+        ui->textBrowser->append("ChaCha20 will be used with Poly1305 if it is the only cipher used or if it is the last cipher used in a chain. "
+                                "The number of bits refers to the nonce size. 64-bit has a higher proabability of nonce reuse but "
+                                "a higher file size limit (exabytes). 96-bit and 192-bit nonces have a lower probability of nonce reuse "
+                                "but a lower file size limit (256GB). ChaCha20 with a 192-bit nonce is XChaCha20.\n");
+    }
 }
 
 void MainWindow::updateButtons()
@@ -404,5 +414,6 @@ void MainWindow::updateCipherList(QString addToggle)
     cipherChain.replace("()", "");
     ui->lineEdit_cipherList->setText(cipherChain);
     updateButtons();
+    updateComboBox(ui->comboBox_cipher->currentText());
 }
 

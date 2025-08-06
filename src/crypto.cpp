@@ -251,8 +251,10 @@ void Crypto::run()
     } else  {
         ciphertext_size = filesize - header.size() - iv.size() - salt.size();
         size_t remainder = ciphertext_size % chunkSize;
-        size_t blocksize = Botan::BlockCipher::create_or_throw(cipher)->block_size();
-        if(mode == "CBC") remainder = blocksize;
+        size_t blocksize;
+        if(cipher != "ChaCha20" && cipher != "ChaCha20Poly1305") blocksize = Botan::BlockCipher::create_or_throw(cipher)->block_size();
+        if(mode == "CBC" || cipher == "Threefish-512") remainder = blocksize;
+        std::cout << "Remainder: " << remainder << " Ciphertext size: " << ciphertext_size << std::flush;
         if(remainder > 0 && mode != "OCB"){ // OCB only allows multiple of block size for update calls
             inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), remainder);
             std::vector<uint8_t> chunk(buffer.begin(), buffer.begin() + inputFileHandle.gcount());
