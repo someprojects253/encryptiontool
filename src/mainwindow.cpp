@@ -100,20 +100,17 @@ void MainWindow::updateComboBox(QString item)
     ui->comboBox_mode->clear();
     // 128-bit block ciphers
     if(item == "AES" || item == "Serpent" || item == "Twofish" || item == "Camellia" || item == "Kuznyechik" || item == "SM4"){
-        if(cipherList.size() == 0) ui->comboBox_mode->addItems({"GCM", "CTR", "CBC", "OCB", "EAX", "SIV", "CCM", "CFB", "OFB"});
-        else ui->comboBox_mode->addItems({"CTR", "CBC", "CFB", "OFB"});
+        ui->comboBox_mode->addItems({"GCM", "CTR", "CBC", "OCB", "EAX", "SIV", "CCM", "CFB", "OFB"});
     }
     // Wide block ciphers
     if (item == "SHACAL2" || item == "Threefish-512"){
-        if(cipherList.size() == 0) ui->comboBox_mode->addItems({"CTR", "CBC", "OCB", "EAX", "CFB", "OFB"});
-        else ui->comboBox_mode->addItems({"CTR", "CBC", "CFB", "OFB"});
+        ui->comboBox_mode->addItems({"CTR", "CBC", "OCB", "EAX", "CFB", "OFB"});
     }
     // 64-bit block ciphers
     if (item == "Blowfish" || item == "IDEA" || item == "3DES") {
-        if(cipherList.size() == 0) ui->comboBox_mode->addItems({"EAX", "CTR", "CBC", "CFB", "OFB"});
-        else ui->comboBox_mode->addItems({"CTR", "CBC", "CFB", "OFB"});
         ui->textBrowser->append(item + ": This is a 64-bit block cipher. Recommended not to encrypt more than "
                                        "4GB with this cipher.\n");
+        ui->comboBox_mode->addItems({"EAX", "CTR", "CBC", "CFB", "OFB"});
     }
     if (item == "ChaCha20"){
         ui->comboBox_mode->addItems({"192-bit", "96-bit", "64-bit"});
