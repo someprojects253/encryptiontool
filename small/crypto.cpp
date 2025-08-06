@@ -196,8 +196,8 @@ void Crypto::run()
         std::cout << ciphertext_size << std::flush;
         size_t blocksize = Botan::BlockCipher::create_or_throw(cipher)->block_size();
         size_t remainder = ciphertext_size % chunkSize;
-        if(mode == "CBC") remainder = blocksize;
-        if(remainder > 0 && mode != "OCB"){
+        if(mode == "CBC" || mode == "OCB") remainder = blocksize;
+        if(remainder > 0){
             inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), remainder);
             std::vector<uint8_t> chunk(buffer.begin(), buffer.begin() + inputFileHandle.gcount());
             if(isAEAD){
