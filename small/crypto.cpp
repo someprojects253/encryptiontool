@@ -152,7 +152,7 @@ void Crypto::run()
     }
 
     if(mode == "SIV" || mode == "CCM(16,4)" || filesize < 4096) {
-        std::vector<uint8_t> buffer;
+        Botan::secure_vector<uint8_t> buffer;
 
         if(encryptToggle == "Decrypt") buffer.resize(filesize - salt.size() - header.size() - iv.size());
         else buffer.resize(filesize);
@@ -162,10 +162,10 @@ void Crypto::run()
             encAEAD->finish(buffer);
         } else {
             if(encryptToggle == "Decrypt"){
-                hmac->update(buffer);
-                hmac->final(hmac_tag);
                 std::vector<uint8_t> checktag(buffer.end()-32, buffer.end());
                 buffer.resize(buffer.size()-32);
+                hmac->update(buffer);
+                hmac->final(hmac_tag);
                 if(checktag == hmac_tag)
                     emit sendMessage("Authentication successful.");
                 else
