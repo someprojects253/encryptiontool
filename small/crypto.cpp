@@ -193,10 +193,12 @@ void Crypto::run()
         ciphertext_size = filesize;
     } else  {
         ciphertext_size = filesize - header.size() - iv.size() - salt.size();
-        std::cout << ciphertext_size << std::flush;
+        // std::cout << ciphertext_size << std::flush << std::newl;
         size_t blocksize = Botan::BlockCipher::create_or_throw(cipher)->block_size();
         size_t remainder = ciphertext_size % chunkSize;
-        if(mode == "CBC" || mode == "OCB" || cipher == "Threefish-512") remainder = blocksize;
+        // Check that this works for Threefish-512
+        if(mode == "CBC" || mode == "OCB" || cipher == "Threefish-512") remainder = chunkSize - blocksize;
+        std::cout << remainder << "\n" << std::flush;
         if(remainder > 0){
             inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), remainder);
             std::vector<uint8_t> chunk(buffer.begin(), buffer.begin() + inputFileHandle.gcount());
@@ -218,12 +220,12 @@ void Crypto::run()
         size_t bytesRead = inputFileHandle.gcount();
         totalBytesRead += bytesRead;
         if (bytesRead == 0) break;
+        std::cout << bytesRead << "\n" << std::flush;
 
         std::vector<uint8_t> chunk(buffer.begin(), buffer.begin() + bytesRead);
 
         try {
             if(inputFileHandle.eof() || inputFileHandle.peek() == EOF){
-                emit sendMessage(QString::number(bytesRead));
                 Botan::secure_vector<uint8_t> out(chunk.begin(), chunk.end());
                 if(isAEAD){
                     encAEAD->finish(out);  // tag is verified and removed
