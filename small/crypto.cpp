@@ -197,7 +197,7 @@ void Crypto::run()
         size_t blocksize = Botan::BlockCipher::create_or_throw(cipher)->block_size();
         size_t remainder = ciphertext_size % chunkSize;
         // Check that this works for Threefish-512
-        if(mode == "CBC" || mode == "OCB" || cipher == "Threefish-512") remainder = chunkSize - blocksize;
+        if(mode == "CBC" || mode == "OCB" || cipher == "Threefish-512") remainder = chunkSize - blocksize * 2;
         std::cout << remainder << "\n" << std::flush;
         if(remainder > 0){
             inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), remainder);
@@ -220,7 +220,6 @@ void Crypto::run()
         size_t bytesRead = inputFileHandle.gcount();
         totalBytesRead += bytesRead;
         if (bytesRead == 0) break;
-        std::cout << bytesRead << "\n" << std::flush;
 
         std::vector<uint8_t> chunk(buffer.begin(), buffer.begin() + bytesRead);
 
@@ -232,6 +231,7 @@ void Crypto::run()
                 }
                 else{
                     if(encryptToggle == "Decrypt"){
+                        std::cout << bytesRead << std::flush;
                         std::vector<uint8_t> checktag(out.end() - 32, out.end());
                         out.resize(out.size() - 32);
                         hmac->update(out);
