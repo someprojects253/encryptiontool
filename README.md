@@ -16,4 +16,6 @@ Supported PBKDFs: Argon2id, Argon2d, Argon2i, PBKDF2, Scrypt
 
 bugs: Chaining some modes and ciphers may cause crashes. CBC needs adjusting.
 
+to do: handle passwords more securely
+
 ![Screenshot_20250705_234309](https://github.com/user-attachments/assets/ab9e5620-7c0e-4655-af27-e67c362f2ade)
