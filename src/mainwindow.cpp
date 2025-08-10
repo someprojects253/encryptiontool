@@ -7,9 +7,6 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
-    // Encrypt/Decrypt buttons
-    ui->pushButton_addCipher->setEnabled(false);
-    ui->pushButton_removeCipher->setEnabled(false);
     connect(ui->pushButton_Encrypt, &QPushButton::clicked, this, [this]() {
         run("Encrypt");
     });
@@ -17,29 +14,52 @@ MainWindow::MainWindow(QWidget *parent)
         run("Decrypt");
     });
 
-    // UI elements for chained encryption
-    connect(ui->pushButton_addCipher, &QPushButton::clicked, this, [this] () {
-        updateCipherList("Add");
-    });
-    connect(ui->pushButton_removeCipher, &QPushButton::clicked, this, [this] () {
-        updateCipherList("Remove");
-    });
-    connect(ui->checkBox_chain, &QCheckBox::checkStateChanged, this, [this] (Qt::CheckState state) {
-        cipherList.clear();
-        ui->lineEdit_cipherList->clear();
-        if(state == Qt::Checked) {
-            ui->pushButton_addCipher->setEnabled(true);
-            ui->pushButton_removeCipher->setEnabled(true);
-        } else {
-            ui->pushButton_addCipher->setEnabled(false);
-            ui->pushButton_removeCipher->setEnabled(false);
-        }
-        updateButtons();
-    });
-
-    // Password UI elements
     connect(ui->lineEdit_Password, &QLineEdit::textEdited, this, &MainWindow::updateButtons);
     connect(ui->lineEdit_confirmPassword, &QLineEdit::textEdited, this, &MainWindow::updateButtons);
+
+    connect(this, &MainWindow::fileDropped, this, [this]() {
+        ui->lineEdit_inputFile->setText(QString::fromStdString(inputFilePath));
+        getHeader();
+        updateButtons();
+        setParams("header");
+    });
+
+    connect(ui->comboBox_cipher, &QComboBox::currentTextChanged, this, [this] (QString item){
+        ui->textBrowser->clear();
+        ui->comboBox_mode->clear();
+        // 128-bit block ciphers
+        if(item == "AES" || item == "Serpent" || item == "Twofish" || item == "Camellia" || item == "Kuznyechik" || item == "SM4")
+            ui->comboBox_mode->addItems({"GCM", "OCB", "EAX", "SIV", "CCM", "CBC", "CTR", "OFB", "CFB"});
+        // Wide block ciphers
+        if (item == "SHACAL2" || item == "Threefish-512")
+            ui->comboBox_mode->addItems({"OCB", "EAX", "CBC", "CTR", "OFB", "CFB"});
+        // 64-bit block ciphers
+        if (item == "Blowfish" || item == "IDEA" || item == "3DES") {
+            ui->comboBox_mode->addItems({"EAX", "CBC", "CTR", "OFB", "CFB"});
+            ui->textBrowser->append(item + ": This is a 64-bit block cipher. Recommended not to encrypt more than "
+                                           "4GB with this cipher.\n");
+        }
+        if (item == "ChaCha20"){
+            ui->comboBox_mode->addItems({"192-bit", "96-bit", "64-bit"});
+            ui->textBrowser->append("ChaCha20 will be used with Poly1305. "
+                                    "The number of bits refers to the nonce size. 64-bit has a higher proabability of nonce reuse but "
+                                    "a higher file size limit (exabytes). 96-bit and 192-bit nonces have a lower probability of nonce reuse "
+                                    "but a lower file size limit (256GB). ChaCha20 with a 192-bit nonce is XChaCha20.\n");
+        }
+    });
+
+    connect(ui->comboBox_mode, &QComboBox::currentTextChanged, this, [this] (QString item) {
+        if(item == "GCM")
+            ui->textBrowser->append("Max file size in GCM mode is ~64GB before security failure.");
+        if(item == "SIV")
+            ui->textBrowser->append("Warning: SIV mode loads entire file into memory. Ensure you have enough memory available.");
+    });
+    
+    connect (ui->comboBox_PBKDF, &QComboBox::currentTextChanged, this, [this]() {
+        updateLabels();
+        setParams();
+    });
+
     connect(ui->checkBox_showPassword, &QCheckBox::checkStateChanged, this, [this](const Qt::CheckState& checkState) {
         if(checkState == Qt::Checked){
             ui->lineEdit_Password->setEchoMode(QLineEdit::Normal);
@@ -49,44 +69,6 @@ MainWindow::MainWindow(QWidget *parent)
             ui->lineEdit_confirmPassword->setEchoMode(QLineEdit::Password);
         }
     });
-
-    // Handle file dropped
-    connect(this, &MainWindow::fileDropped, this, [this]() {
-        ui->lineEdit_inputFile->setText(QString::fromStdString(inputFilePath));
-        getHeader();
-        if(header.size() > 0) setParams("header");
-        else setParams("");
-        updateButtons();
-    });
-
-    // Information about ciphers and modes. Add and remove modes based on ciphers.
-    connect(ui->comboBox_cipher, &QComboBox::currentTextChanged, this, [this] (QString item){
-        updateComboBox(item);
-    });
-
-    connect(ui->comboBox_mode, &QComboBox::currentTextChanged, this, [this] (QString item) {
-        if(item == "GCM")
-            ui->textBrowser->append("Max file size in GCM mode is ~64GB before security failure.");
-        if(item == "CCM")
-            ui->textBrowser->append("Warning: CCM mode (L=4) has max file size of 4GB. Entire file is loaded into memory. Ensure you have enough memory available.\n");
-        if(item == "SIV")
-            ui->textBrowser->append("Warning: SIV mode loads entire file into memory. Ensure you have enough memory available.");
-        if(item == "CTR" || item == "CBC" || item == "CFB" || item == "OFB")
-            ui->textBrowser->append(item + ": This is an unauthenticated mode. If a cipher is used in this mode, and if it is the only cipher "
-                                                  "used, or if it is the last cipher used in a chain, authentication will be added with HMAC-SHA256. "
-                                                  "The authentication tag is 32 bytes and will be added to the end of the file.\n");
-        if(item == "CTR")
-            ui->textBrowser->append("The counter portion is set to 8 bytes for CTR. The allows for a maximum file size"
-                                    " of approximately 2^64 blocks of data.\n");
-    });
-
-    // Update labels for different PBKDFs
-    connect (ui->comboBox_PBKDF, &QComboBox::currentTextChanged, this, [this](){
-        updateLabels();
-        setParams("");
-    });
-
-    ui->textBrowser->append("Max file size in GCM mode is ~64GB before security failure.");
 }
 
 MainWindow::~MainWindow()
@@ -94,39 +76,11 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-void MainWindow::updateComboBox(QString item)
-{
-    ui->textBrowser->clear();
-    ui->comboBox_mode->clear();
-    // 128-bit block ciphers
-    if(item == "AES" || item == "Serpent" || item == "Twofish" || item == "Camellia" || item == "Kuznyechik" || item == "SM4"){
-        ui->comboBox_mode->addItems({"GCM", "CTR", "CBC", "OCB", "EAX", "SIV", "CCM", "CFB", "OFB"});
-    }
-    // Wide block ciphers
-    if (item == "SHACAL2" || item == "Threefish-512"){
-        ui->comboBox_mode->addItems({"CTR", "CBC", "OCB", "EAX", "CFB", "OFB"});
-    }
-    // 64-bit block ciphers
-    if (item == "Blowfish" || item == "IDEA" || item == "3DES") {
-        ui->textBrowser->append(item + ": This is a 64-bit block cipher. Recommended not to encrypt more than "
-                                       "4GB with this cipher.\n");
-        ui->comboBox_mode->addItems({"EAX", "CTR", "CBC", "CFB", "OFB"});
-    }
-    if (item == "ChaCha20"){
-        ui->comboBox_mode->addItems({"192-bit", "96-bit", "64-bit"});
-        ui->textBrowser->append("ChaCha20 will be used with Poly1305 if it is the only cipher used or if it is the last cipher used in a chain. "
-                                "The number of bits refers to the nonce size. 64-bit has a higher proabability of nonce reuse but "
-                                "a higher file size limit (exabytes). 96-bit and 192-bit nonces have a lower probability of nonce reuse "
-                                "but a lower file size limit (256GB). ChaCha20 with a 192-bit nonce is XChaCha20.\n");
-    }
-}
-
 void MainWindow::updateButtons()
 {
     QString password = ui->lineEdit_Password->text();
     QString confirm = ui->lineEdit_confirmPassword->text();
-
-    if(password.length() > 0 && inputFilePath.length() > 0 && (cipherList.size() > 0 || !ui->checkBox_chain->isChecked())){
+    if(password.length() > 0 && inputFilePath.length() > 0){
         ui->pushButton_Decrypt->setEnabled(true);
         if(password == confirm) ui->pushButton_Encrypt->setEnabled(true);
         else ui->pushButton_Encrypt->setEnabled(false);
@@ -138,8 +92,6 @@ void MainWindow::updateButtons()
 
 void MainWindow::run(std::string encryptToggle)
 {
-    ui->textBrowser->clear();
-
     std::string cipher = ui->comboBox_cipher->currentText().toStdString();
     std::string mode = ui->comboBox_mode->currentText().toStdString();
     std::string password = ui->lineEdit_Password->text().toStdString();
@@ -151,79 +103,39 @@ void MainWindow::run(std::string encryptToggle)
     if(cipher == "AES") cipher = "AES-256";
     if(cipher == "Camellia") cipher = "Camellia-256";
 
-    std::string cipherChain = cipher + "/" + mode;
-    if(ui->checkBox_chain->isChecked()) {
-        cipherChain = ui->lineEdit_cipherList->text().toStdString();
-    } else {
-        if(cipher == "ChaCha20") cipher = "ChaCha20Poly1305";
-        std::string algostr = cipher + "/" + mode;
-        cipherList.push_back(algostr);
-    }
-
     if(encryptToggle == "Encrypt") {
-        outputFilePath = inputFilePath + ".bin";
         if(ui->checkBox_header->isChecked()){
             this->header = "cryptoheader\n"
                             "pbkdf=" + pbkdf + "\n"
-                            "cipher=" + cipherChain + "\n"
+                            "cipher=" + cipher + "/" + mode+ "\n"
                             "memcost=" + std::to_string(memcost) + "\n"
                             "timecost=" + std::to_string(timecost) + "\n"
                             "threads=" + std::to_string(threads) + "\nendheader";
 
-            std::string from, to;
-            if(pbkdf != "Scrypt" && pbkdf != "PBKDF2"){
-                from = "memcost";
-                to = "memcost(MiB)";
-            }
-            if(pbkdf == "PBKDF2"){
-                from = "timecost";
-                to = "timecost(1000s)";
-            }
-            if(pbkdf == "Scrypt") {
-                from = "timecost";
-                to = "timecost(2^x)";
-            }
-            if (auto pos = header.find(from); pos != std::string::npos)
-                header.replace(pos, from.length(), to);
+            QString qheader = QString::fromStdString(header);
+            if(pbkdf != "Scrypt" && pbkdf != "PBKDF2")
+                qheader.replace("memcost", "memcost(MiB)");
+            if(pbkdf == "PBKDF2")
+                qheader.replace("timecost", "timecost(1000s)");
+            if(pbkdf == "Scrypt")
+                qheader.replace("timecost", "timecost(2^x)");
+            header = qheader.toStdString();
         } else {
             this->header="";
         }
     }
-    if(encryptToggle == "Decrypt"){
-        std::string to_remove = ".bin";
-        std::string edited = inputFilePath;
-        size_t pos = edited.find(to_remove);
-        if (pos != std::string::npos) {
-            edited.erase(pos, to_remove.length());
-            edited += "_decrypted";
-        } else {
-            edited += "_decrypted";
-        }
-        outputFilePath = edited;
-    }
 
-    // if(ui->checkBox_chain->isChecked() == false) {
-    //     std::string algostr = cipher + "/" + mode;
-    //     if(cipher == "ChaCha20") algostr = "ChaCha20Poly1305";
-    //     cipherList.push_back(algostr);
-    // }
-    if(encryptToggle == "Encrypt") std::reverse(cipherList.begin(), cipherList.end());
-
-    Crypto* worker = new Crypto(nullptr, encryptToggle, password, inputFilePath, outputFilePath,
-                                pbkdf, memcost, timecost, threads, header, cipherList);
+    Crypto* worker = new Crypto(nullptr, encryptToggle, cipher, mode, password, inputFilePath, outputFilePath,
+                                pbkdf, memcost, timecost, threads, header);
     QThread* thread = new QThread;
-
 
     worker->moveToThread(thread);
 
-    connect(thread, &QThread::started, worker, &Crypto::start);
+    connect(thread, &QThread::started, worker, &Crypto::run);
     connect(worker, &Crypto::finished, this, [this]{
         updateButtons();
         ui->progressBar->setValue(100);
         this->header.clear();
-        cipherList.clear();
-        ui->lineEdit_cipherList->clear();
-        ui->textBrowser->append("Done");
     });
     connect(worker, &Crypto::finished, thread, &QThread::quit);
     connect(worker, &Crypto::finished, worker, &QObject::deleteLater);
@@ -242,13 +154,14 @@ void MainWindow::run(std::string encryptToggle)
 
     ui->lineEdit_Password->clear();
     ui->lineEdit_confirmPassword->clear();
-    password.clear();
-    header.clear();
     thread->start();
 }
 
 void MainWindow::getHeader()
 {
+    QString qoutput = QString::fromStdString(inputFilePath);
+    outputFilePath = qoutput.remove("_processed").toStdString();
+
     std::ifstream inputFileHandle(inputFilePath, std::ios::binary);
     if (!inputFileHandle)
         return;  // Handle file open failure gracefully
@@ -264,6 +177,8 @@ void MainWindow::getHeader()
 
     if (startCheck != headerStart){
         ui->textBrowser->append("No header found.");
+        outputFilePath += "_processed";
+        ui->lineEdit_outputFile->setText(QString::fromStdString(outputFilePath));
         return;  // No header — do nothing
     }
 
@@ -289,9 +204,11 @@ void MainWindow::getHeader()
     std::string fullHeader = headerStream.str();
     ui->textBrowser->append("Header found: \n" + QString::fromStdString(fullHeader));
     this->header = fullHeader;  // Assuming `header` is a member variable
+    outputFilePath += "_decrypted";
+    ui->lineEdit_outputFile->setText(QString::fromStdString(outputFilePath));
 }
 
-void MainWindow::setParams(std::string preset)
+void MainWindow::setParams(QString preset)
 {
     if(preset != "header") {
         QString pbkdf = ui->comboBox_PBKDF->currentText();
@@ -311,7 +228,7 @@ void MainWindow::setParams(std::string preset)
         return;
     }
 
-    cipherList.clear();
+
     std::istringstream stream(header);
     std::string line;
 
@@ -321,10 +238,6 @@ void MainWindow::setParams(std::string preset)
             std::string key = line.substr(0, pos);
             std::string value = line.substr(pos + 1);
 
-            if(key == "memcost" || key == "memcost(MiB)")  ui->lineEdit_memcost->setText(QString::fromStdString(value));
-            if(key == "timecost" || key == "timecost(2^x)" || key == "timecost(1000s)") ui->lineEdit_timecost->setText(QString::fromStdString(value));
-            if(key == "threads") ui->lineEdit_threads->setText(QString::fromStdString(value));
-
             if(key == "pbkdf") {
                 int index = ui->comboBox_PBKDF->findText(QString::fromStdString(value));
                 ui->comboBox_PBKDF->setCurrentIndex(index);
@@ -333,34 +246,21 @@ void MainWindow::setParams(std::string preset)
                 std::string algostr = value;
                 std::string cipherstr, modestr;
 
-                QString algoQStr = QString::fromStdString(algostr);
-                if(algoQStr.contains("(")) {
-                    ui->checkBox_chain->setCheckState(Qt::Checked);
-                    ui->lineEdit_cipherList->setText(algoQStr);
-                    algoQStr.remove(")");
-                    QStringList cipherListQStr = algoQStr.split("(");
-                    for(const QString& item : cipherListQStr) {
-                        cipherList.push_back(item.toStdString());
-                    }
-                } else {
-                    ui->checkBox_chain->setCheckState(Qt::Unchecked);
-                    ui->lineEdit_cipherList->clear();
-
-                    size_t pos = algostr.find('/');
-                    if (pos != std::string::npos) {
-                        cipherstr = algostr.substr(0, pos);
-                        modestr = algostr.substr(pos + 1);
-                    }
-                    if(cipherstr == "AES-256") cipherstr = "AES";
-                    if(cipherstr == "Camellia-256") cipherstr = "Camellia";
-
-                    int index = ui->comboBox_cipher->findText(QString::fromStdString(cipherstr));
-                    ui->comboBox_cipher->setCurrentIndex(index);
-                    index = ui->comboBox_mode->findText(QString::fromStdString(modestr));
-                    ui->comboBox_mode->setCurrentIndex(index);
-
+                size_t pos = algostr.find('/');
+                if (pos != std::string::npos) {
+                    cipherstr = algostr.substr(0, pos);
+                    modestr = algostr.substr(pos + 1);
                 }
+                if(cipherstr == "AES-256") cipherstr = "AES";
+
+                int index = ui->comboBox_cipher->findText(QString::fromStdString(cipherstr));
+                ui->comboBox_cipher->setCurrentIndex(index);
+                index = ui->comboBox_mode->findText(QString::fromStdString(modestr));
+                ui->comboBox_mode->setCurrentIndex(index);
             }
+            if(key == "memcost" || key == "memcost(MiB)")  ui->lineEdit_memcost->setText(QString::fromStdString(value));
+            if(key == "timecost" || key == "timecost(2^x)" || key == "timecost(1000s)") ui->lineEdit_timecost->setText(QString::fromStdString(value));
+            if(key == "threads") ui->lineEdit_threads->setText(QString::fromStdString(value));
         }
     }
 }
@@ -384,33 +284,5 @@ void MainWindow::updateLabels()
         ui->lineEdit_threads->setEnabled(true);
         ui->label_iterations->setText("Iterations (2^x)");
     }
-}
-
-void MainWindow::updateCipherList(QString addToggle)
-{
-    std::string cipher = ui->comboBox_cipher->currentText().toStdString();
-    std::string mode = ui->comboBox_mode->currentText().toStdString();
-    if(cipher == "AES") cipher = "AES-256";
-    if(cipher == "Camellia") cipher = "Camellia-256";
-    if(cipher == "ChaCha20" && cipherList.size() == 0) cipher = "ChaCha20Poly1305";
-    if(addToggle == "Add"){
-        cipherList.push_back(cipher + "/" + mode);
-    } else {
-        if(cipherList.size() > 0) cipherList.pop_back();
-        else return;
-    }
-
-    QString cipherChain = "";
-
-    for(const std::string& item : cipherList) {
-        cipherChain += QString::fromStdString(item) + "(";
-    }
-    for(int i = 0; i < cipherList.size(); i++) {
-        cipherChain += ")";
-    }
-    cipherChain.replace("()", "");
-    ui->lineEdit_cipherList->setText(cipherChain);
-    updateButtons();
-    updateComboBox(ui->comboBox_cipher->currentText());
 }
 
