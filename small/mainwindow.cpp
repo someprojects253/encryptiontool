@@ -104,7 +104,6 @@ void MainWindow::run(std::string encryptToggle)
     if(cipher == "Camellia") cipher = "Camellia-256";
 
     if(encryptToggle == "Encrypt") {
-        outputFilePath = inputFilePath + ".enc";
         if(ui->checkBox_header->isChecked()){
             this->header = "cryptoheader\n"
                             "pbkdf=" + pbkdf + "\n"
