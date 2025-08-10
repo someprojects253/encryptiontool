@@ -69,8 +69,7 @@ void Crypto::run()
         iv.resize(11);
         mode = "CCM(16,4)";
     }
-    // if(mode == "CBC") mode = "CBC/PKCS7";
-    if(mode == "OCB") iv.resize(15);
+    if(mode == "OCB") iv.resize(12); // changed from 15. change back if encountering errors. maybe should include iv size in header
     if(mode == "CBC" || mode == "CTR" || mode == "CFB" || mode == "OFB") iv.resize(Botan::BlockCipher::create_or_throw(cipher)->block_size());
     if(mode == "EAX") iv.resize(key.size()); // maybe needs adjusting for shacal2
     if(mode == "192-bit") iv.resize(24);
@@ -108,11 +107,14 @@ void Crypto::run()
         inputFileHandle.read(reinterpret_cast<char*>(iv.data()), iv.size());
     }
 
-    if(isAEAD) encAEAD = Botan::AEAD_Mode::create_or_throw(algostrview, dir);
-    else enc = Botan::Cipher_Mode::create_or_throw(algostrview, dir);
-
-    if(isAEAD) key.resize(encAEAD->maximum_keylength());
-    else key.resize(enc->maximum_keylength());
+    if(isAEAD) {
+        encAEAD = Botan::AEAD_Mode::create_or_throw(algostrview, dir);
+        key.resize(encAEAD->maximum_keylength());
+    }
+    else {
+        enc = Botan::Cipher_Mode::create_or_throw(algostrview, dir);
+        key.resize(enc->maximum_keylength());
+    }
 
     deriveKey(salt);
 
@@ -146,135 +148,79 @@ void Crypto::run()
     int lastPercent = -1;
     inputFileHandle.seekg(0, std::ios::end);
     size_t filesize = inputFileHandle.tellg();
-    if(encryptToggle == "Encrypt") inputFileHandle.seekg(0, std::ios::beg);
+    size_t ciphertext_size;
+    if(encryptToggle == "Encrypt") {
+        ciphertext_size = filesize;
+        inputFileHandle.seekg(0, std::ios::beg);
+    }
     if(encryptToggle == "Decrypt") {
+        ciphertext_size = filesize - header.size() - salt.size() - iv.size();
         inputFileHandle.seekg(salt.size() + iv.size() + header.size(), std::ios::beg);
     }
 
-    if(mode == "SIV" || mode == "CCM(16,4)" || filesize < 4096) {
-        Botan::secure_vector<uint8_t> buffer;
+    size_t chunkSize = 1024 * 1024;
 
-        if(encryptToggle == "Decrypt") buffer.resize(filesize - salt.size() - header.size() - iv.size());
-        else buffer.resize(filesize);
-        inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
-
-        if(isAEAD) {
-            encAEAD->finish(buffer);
-        } else {
-            if(encryptToggle == "Decrypt"){
-                std::vector<uint8_t> checktag(buffer.end()-32, buffer.end());
-                buffer.resize(buffer.size()-32);
-                hmac->update(buffer);
-                hmac->final(hmac_tag);
-                if(checktag == hmac_tag)
-                    emit sendMessage("Authentication successful.");
-                else
-                    emit sendMessage("Authentication failed.");
-            }
-            enc->finish(buffer);
-            if(encryptToggle == "Encrypt"){
-                hmac->update(buffer);
-                hmac->final(hmac_tag);
-            }
-        }
-        outputFileHandle.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
-        if(!isAEAD && encryptToggle == "Encrypt") outputFileHandle.write(reinterpret_cast<const char*>(hmac_tag.data()), hmac_tag.size());
-
-        emit finished();
-        return;
-    }
-
-    size_t chunkSize = 4096;
-    size_t ciphertext_size;
-    size_t totalBytesRead = 0;
     std::vector<uint8_t> buffer(chunkSize);
+    size_t totalBytesRead = 0;
+    size_t remainder = ciphertext_size % chunkSize;
+    size_t numchunks = (ciphertext_size - remainder - chunkSize) / chunkSize; // case when ciphertext is multiple of chunksize?
 
-    if(encryptToggle == "Encrypt"){
-        ciphertext_size = filesize;
-    } else  {
-        ciphertext_size = filesize - header.size() - iv.size() - salt.size();
-        // std::cout << ciphertext_size << std::flush << std::newl;
-        size_t blocksize = Botan::BlockCipher::create_or_throw(cipher)->block_size();
-        size_t remainder = ciphertext_size % chunkSize;
-        // Check that this works for Threefish-512
-        if(mode == "CBC" || mode == "OCB" || cipher == "Threefish-512") remainder = chunkSize - blocksize * 2;
-        std::cout << remainder << "\n" << std::flush;
-        if(remainder > 0){
-            inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), remainder);
-            std::vector<uint8_t> chunk(buffer.begin(), buffer.begin() + inputFileHandle.gcount());
-            if(isAEAD){
-                encAEAD->update(chunk);
-            }
-            else {
-                if(encryptToggle == "Decrypt") hmac->update(chunk);
-                enc->update(chunk);
-                if(encryptToggle == "Encrypt") hmac->update(chunk);
-            }
-            outputFileHandle.write(reinterpret_cast<const char*>(chunk.data()), chunk.size());
-        }
-    }
+    // Encrypt in chunks if applicable
+    if(!(mode == "SIV" || mode == "CCM(16,4)" || ciphertext_size < (1 << 20))){
+        for(size_t i = 0; i < numchunks; i++){
+            inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), chunkSize);
+            size_t read = inputFileHandle.gcount();
+            buffer.resize(read);  // resize to actual data read
 
-    while(true){
-        inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
 
-        size_t bytesRead = inputFileHandle.gcount();
-        totalBytesRead += bytesRead;
-        if (bytesRead == 0) break;
-
-        std::vector<uint8_t> chunk(buffer.begin(), buffer.begin() + bytesRead);
-
-        try {
-            if(inputFileHandle.eof() || inputFileHandle.peek() == EOF){
-                Botan::secure_vector<uint8_t> out(chunk.begin(), chunk.end());
-                if(isAEAD){
-                    encAEAD->finish(out);  // tag is verified and removed
-                }
-                else{
-                    if(encryptToggle == "Decrypt"){
-                        std::cout << bytesRead << std::flush;
-                        std::vector<uint8_t> checktag(out.end() - 32, out.end());
-                        out.resize(out.size() - 32);
-                        hmac->update(out);
-                        hmac->final(hmac_tag);
-                        if(checktag != hmac_tag){
-                            emit sendMessage("Authenitcation failed.");
-                        } else {
-                            emit sendMessage("Authentication succeeded.");
-                        }
-                    }
-                    enc->finish(out);
-                    if(encryptToggle == "Encrypt") {
-                        hmac->update(out);
-                        hmac->final(hmac_tag);
-                    }
-                }
-                outputFileHandle.write(reinterpret_cast<const char*>(out.data()), out.size());
+            if(isAEAD) {
+                encAEAD->update(buffer);
             } else {
-                if(isAEAD){
-                    encAEAD->update(chunk);
-                }
-                else{
-                    if(encryptToggle == "Decrypt") hmac->update(chunk);
-                    enc->update(chunk);
-                    if(encryptToggle == "Encrypt") hmac->update(chunk);
-                }
-                outputFileHandle.write(reinterpret_cast<const char*>(chunk.data()), chunk.size());
+                if(encryptToggle == "Decrypt") hmac->update(buffer);
+                enc->update(buffer);
+                if(encryptToggle == "Encrypt") hmac->update(buffer);
             }
 
-        } catch(const Botan::Exception& e) {
-            emit sendMessage(QString::fromStdString(e.what()));
-            return;
-        }
+            outputFileHandle.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
 
-        int percent = static_cast<int>((100.0 * totalBytesRead) / filesize);
-        if (percent != lastPercent) {
-            emit progress(percent);
-            lastPercent = percent;
+            totalBytesRead += read;
+            int percent = static_cast<int>((100.0 * totalBytesRead) / ciphertext_size);
+            if (percent != lastPercent) {
+                emit progress(percent);
+                lastPercent = percent;
+            }
         }
     }
+
+    // Load entire file into memory for some modes, otherwise finish last chunk
+    if(mode == "SIV" || mode == "CCM(16,4)" || ciphertext_size < (1 << 20)) buffer.resize(ciphertext_size);
+    else buffer.resize(chunkSize * 2);
+    inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
+    buffer.resize(inputFileHandle.gcount());
+
+    if(isAEAD){
+        encAEAD->finish(buffer);
+    } else {
+        if(encryptToggle == "Decrypt"){
+            std::vector<uint8_t> checktag(buffer.end()-32, buffer.end());
+            buffer.resize(buffer.size()-32);
+            hmac->update(buffer);
+            hmac->final(hmac_tag);
+            if(checktag == hmac_tag)
+                emit sendMessage("Authentication successful.");
+            else
+                emit sendMessage("Authentication failed.");
+        }
+        enc->finish(buffer);
+        if(encryptToggle == "Encrypt"){
+            hmac->update(buffer);
+            hmac->final(hmac_tag);
+        }
+    }
+
+    outputFileHandle.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
 
     if(!isAEAD && encryptToggle == "Encrypt") outputFileHandle.write(reinterpret_cast<const char*>(hmac_tag.data()), hmac_tag.size());
-
 
     inputFileHandle.close();
     outputFileHandle.close();

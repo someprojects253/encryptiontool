@@ -113,36 +113,17 @@ void MainWindow::run(std::string encryptToggle)
                             "timecost=" + std::to_string(timecost) + "\n"
                             "threads=" + std::to_string(threads) + "\nendheader";
 
-            std::string from, to;
-            if(pbkdf != "Scrypt" && pbkdf != "PBKDF2"){
-                from = "memcost";
-                to = "memcost(MiB)";
-            }
-            if(pbkdf == "PBKDF2"){
-                from = "timecost";
-                to = "timecost(1000s)";
-            }
-            if(pbkdf == "Scrypt") {
-                from = "timecost";
-                to = "timecost(2^x)";
-            }
-            if (auto pos = header.find(from); pos != std::string::npos)
-                header.replace(pos, from.length(), to);
+            QString qheader = QString::fromStdString(header);
+            if(pbkdf != "Scrypt" && pbkdf != "PBKDF2")
+                qheader.replace("memcost", "memcost(MiB)");
+            if(pbkdf == "PBKDF2")
+                qheader.replace("timecost", "timecost(1000s)");
+            if(pbkdf == "Scrypt")
+                qheader.replace("timecost", "timecost(2^x)");
+            header = qheader.toStdString();
         } else {
             this->header="";
         }
-    }
-    if(encryptToggle == "Decrypt"){
-        std::string to_remove = ".enc";
-        std::string edited = inputFilePath;
-        size_t pos = edited.find(to_remove);
-        if (pos != std::string::npos) {
-            edited.erase(pos, to_remove.length());
-            edited += "_decrypted";
-        } else {
-            edited += "_decrypted";
-        }
-        outputFilePath = edited;
     }
 
     Crypto* worker = new Crypto(nullptr, encryptToggle, cipher, mode, password, inputFilePath, outputFilePath,
@@ -179,6 +160,9 @@ void MainWindow::run(std::string encryptToggle)
 
 void MainWindow::getHeader()
 {
+    QString qoutput = QString::fromStdString(inputFilePath);
+    outputFilePath = qoutput.remove("_processed").toStdString();
+
     std::ifstream inputFileHandle(inputFilePath, std::ios::binary);
     if (!inputFileHandle)
         return;  // Handle file open failure gracefully
@@ -194,6 +178,8 @@ void MainWindow::getHeader()
 
     if (startCheck != headerStart){
         ui->textBrowser->append("No header found.");
+        outputFilePath += "_processed";
+        ui->lineEdit_outputFile->setText(QString::fromStdString(outputFilePath));
         return;  // No header — do nothing
     }
 
@@ -219,6 +205,8 @@ void MainWindow::getHeader()
     std::string fullHeader = headerStream.str();
     ui->textBrowser->append("Header found: \n" + QString::fromStdString(fullHeader));
     this->header = fullHeader;  // Assuming `header` is a member variable
+    outputFilePath += "_decrypted";
+    ui->lineEdit_outputFile->setText(QString::fromStdString(outputFilePath));
 }
 
 void MainWindow::setParams(QString preset)
