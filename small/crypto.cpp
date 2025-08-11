@@ -166,57 +166,65 @@ void Crypto::run()
     size_t numchunks = (ciphertext_size - remainder - chunkSize) / chunkSize; // case when ciphertext is multiple of chunksize?
 
     // Encrypt in chunks if applicable
-    if(!(mode == "SIV" || mode == "CCM(16,4)" || ciphertext_size < (1 << 20))){
-        for(size_t i = 0; i < numchunks; i++){
-            inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), chunkSize);
-            size_t read = inputFileHandle.gcount();
-            buffer.resize(read);  // resize to actual data read
+
+    try{
+        if(!(mode == "SIV" || mode == "CCM(16,4)" || ciphertext_size < (1 << 20))){
+            for(size_t i = 0; i < numchunks; i++){
+                inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), chunkSize);
+                size_t read = inputFileHandle.gcount();
+                buffer.resize(read);  // resize to actual data read
 
 
-            if(isAEAD) {
-                encAEAD->update(buffer);
-            } else {
-                if(encryptToggle == "Decrypt") hmac->update(buffer);
-                enc->update(buffer);
-                if(encryptToggle == "Encrypt") hmac->update(buffer);
-            }
+                if(isAEAD) {
+                    encAEAD->update(buffer);
+                } else {
+                    if(encryptToggle == "Decrypt") hmac->update(buffer);
+                    enc->update(buffer);
+                    if(encryptToggle == "Encrypt") hmac->update(buffer);
+                }
 
-            outputFileHandle.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
+                outputFileHandle.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
 
-            totalBytesRead += read;
-            int percent = static_cast<int>((100.0 * totalBytesRead) / ciphertext_size);
-            if (percent != lastPercent) {
-                emit progress(percent);
-                lastPercent = percent;
+                totalBytesRead += read;
+                int percent = static_cast<int>((100.0 * totalBytesRead) / ciphertext_size);
+                if (percent != lastPercent) {
+                    emit progress(percent);
+                    lastPercent = percent;
+                }
             }
         }
+
+        // Load entire file into memory for some modes, otherwise finish last chunk
+        if(mode == "SIV" || mode == "CCM(16,4)" || ciphertext_size < (1 << 20)) buffer.resize(ciphertext_size);
+        else buffer.resize(chunkSize * 2);
+        inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
+        buffer.resize(inputFileHandle.gcount());
+
+        if(isAEAD){
+            encAEAD->finish(buffer);
+        } else {
+            if(encryptToggle == "Decrypt"){
+                std::vector<uint8_t> checktag(buffer.end()-32, buffer.end());
+                buffer.resize(buffer.size()-32);
+                hmac->update(buffer);
+                hmac->final(hmac_tag);
+                if(checktag == hmac_tag)
+                    emit sendMessage("Authentication successful.");
+                else
+                    emit sendMessage("Authentication failed.");
+            }
+            enc->finish(buffer);
+            if(encryptToggle == "Encrypt"){
+                hmac->update(buffer);
+                hmac->final(hmac_tag);
+            }
+        }
+    } catch(const Botan::Exception& e) {
+        emit sendMessage(QString(e.what()));
+        emit finished();
+        return;
     }
 
-    // Load entire file into memory for some modes, otherwise finish last chunk
-    if(mode == "SIV" || mode == "CCM(16,4)" || ciphertext_size < (1 << 20)) buffer.resize(ciphertext_size);
-    else buffer.resize(chunkSize * 2);
-    inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
-    buffer.resize(inputFileHandle.gcount());
-
-    if(isAEAD){
-        encAEAD->finish(buffer);
-    } else {
-        if(encryptToggle == "Decrypt"){
-            std::vector<uint8_t> checktag(buffer.end()-32, buffer.end());
-            buffer.resize(buffer.size()-32);
-            hmac->update(buffer);
-            hmac->final(hmac_tag);
-            if(checktag == hmac_tag)
-                emit sendMessage("Authentication successful.");
-            else
-                emit sendMessage("Authentication failed.");
-        }
-        enc->finish(buffer);
-        if(encryptToggle == "Encrypt"){
-            hmac->update(buffer);
-            hmac->final(hmac_tag);
-        }
-    }
 
     outputFileHandle.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
 
