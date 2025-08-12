@@ -28,7 +28,7 @@ std::string pbkdf="", size_t memcost=1, size_t timecost=1, size_t threads=1, std
 
     void run();
     void deriveKey(std::vector<uint8_t> salt);
-    void hmacProcess(std::ifstream& fileHandle);
+    void hmacProcess(std::ifstream& fileHandle, std::vector<uint8_t>& hmac_tag);
 
 signals:
     void finished();

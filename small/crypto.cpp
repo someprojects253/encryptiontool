@@ -63,31 +63,28 @@ void Crypto::run()
     Botan::AutoSeeded_RNG rng;
     std::vector<uint8_t> salt(32);
     std::vector<uint8_t> iv;
-
-    if(mode == "GCM" || mode == "SIV") iv.resize(12);
-    if(mode == "CCM"){
-        iv.resize(11);
-        mode = "CCM(16,4)";
-    }
-    if(mode == "OCB") iv.resize(12); // changed from 15. change back if encountering errors. maybe should include iv size in header
-    if(mode == "CBC" || mode == "CTR" || mode == "CFB" || mode == "OFB") iv.resize(Botan::BlockCipher::create_or_throw(cipher)->block_size());
-    if(mode == "EAX") iv.resize(key.size()); // maybe needs adjusting for shacal2
-    if(mode == "192-bit") iv.resize(24);
-    if(mode == "96-bit") iv.resize(12);
-    if(mode == "64-bit") iv.resize(8);
     std::unique_ptr<Botan::AEAD_Mode> encAEAD;
     std::unique_ptr<Botan::Cipher_Mode> enc;
     std::unique_ptr<Botan::MessageAuthenticationCode> hmac;
     Botan::Cipher_Dir dir;
     std::vector<uint8_t> hmac_tag(32);
-    std::string algostr = cipher + "/" + mode;
 
+    if(mode == "GCM" || mode == "SIV" || mode == "OCB" || mode == "96-bit") iv.resize(12); // OCB changed from 15
+    if(mode == "CCM"){
+        iv.resize(11);
+        mode = "CCM(16,4)";
+    }
+    if(mode == "CBC" || mode == "CTR" || mode == "CFB" || mode == "OFB" || mode == "EAX") iv.resize(Botan::BlockCipher::create_or_throw(cipher)->block_size());
+    if(mode == "192-bit") iv.resize(24);
+    if(mode == "64-bit") iv.resize(8);
+
+    std::string algostr = cipher + "/" + mode;
     if(cipher == "ChaCha20") algostr = "ChaCha20Poly1305";
     if(mode == "CTR") algostr = "CTR-BE(" + cipher +",8)";
     if(mode == "OFB") algostr = "OFB(" + cipher + ")";
     std::string_view algostrview = algostr;
 
-    bool isAEAD = (mode == "GCM" || mode == "SIV" || mode == "OCB" || mode == "CCM(16,4)" || mode == "EAX" || cipher == "ChaCha20Poly1305");
+    bool isAEAD = (mode == "GCM" || mode == "SIV" || mode == "OCB" || mode == "CCM(16,4)" || mode == "EAX" || cipher == "ChaCha20");
 
 
     std::ifstream inputFileHandle(inputFilePath, std::ios::binary);
