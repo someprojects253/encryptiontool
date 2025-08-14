@@ -201,7 +201,7 @@ void Crypto::run()
                 if(checktag == hmac_tag)
                     emit sendMessage("Authentication successful.");
                 else
-                    emit sendMessage("Authentication failed.");
+                    emit sendMessage("Authentication failed. Data corrupt or tampered, or wrong password or key derivation parameters. Recommended to discard file.");
             }
             enc->finish(buffer);
             if(encryptToggle == "Encrypt"){
