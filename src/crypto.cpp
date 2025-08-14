@@ -78,8 +78,8 @@ void Crypto::run()
     // AES is the outermost cipher.
 
     // Resizing ivs, setting cipher string to pass to Botan
-    if(mode == "GCM" || mode == "SIV") iv.resize(12);
-    if(mode == "OCB") iv.resize(12);
+    if(mode == "GCM" || mode == "OCB") iv.resize(12);
+    if(mode == "SIV") iv.resize(16); // changed from 12
     if(mode == "EAX") iv.resize(Botan::BlockCipher::create(cipher)->block_size());
     if(mode == "CCM") {
         mode = "CCM(16,4)";
@@ -272,7 +272,7 @@ void Crypto::run()
                 if(checktag == hmac_tag)
                     emit sendMessage("Authentication successful.");
                 else
-                    emit sendMessage("Authentication failed.");
+                    emit sendMessage("Authentication failed. Data corrupt or tampered, or wrong password or key derivation parameters. Recommended to discard file.");
             }
             enc->finish(buffer);
             if(isOuter && encryptToggle == "Encrypt"){
