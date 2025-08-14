@@ -6,16 +6,14 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    updateComboBox(ui->comboBox_cipher->currentText());
 
-    connect(ui->pushButton_Encrypt, &QPushButton::clicked, this, [this]() {
-        run("Encrypt");
-    });
-    connect(ui->pushButton_Decrypt, &QPushButton::clicked, this, [this]() {
-        run("Decrypt");
-    });
-
+    connect(ui->pushButton_Encrypt, &QPushButton::clicked, this, [this]() { run("Encrypt"); });
+    connect(ui->pushButton_Decrypt, &QPushButton::clicked, this, [this]() { run("Decrypt"); });
     connect(ui->lineEdit_Password, &QLineEdit::textEdited, this, &MainWindow::updateButtons);
     connect(ui->lineEdit_confirmPassword, &QLineEdit::textEdited, this, &MainWindow::updateButtons);
+    connect(ui->comboBox_cipher, &QComboBox::currentTextChanged, this, &MainWindow::updateComboBox);
+    connect(ui->comboBox_mode, &QComboBox::currentTextChanged, this, &MainWindow::displayModeInfo);
 
     connect(this, &MainWindow::fileDropped, this, [this]() {
         ui->lineEdit_inputFile->setText(QString::fromStdString(inputFilePath));
@@ -24,37 +22,6 @@ MainWindow::MainWindow(QWidget *parent)
         setParams("header");
     });
 
-    connect(ui->comboBox_cipher, &QComboBox::currentTextChanged, this, [this] (QString item){
-        ui->textBrowser->clear();
-        ui->comboBox_mode->clear();
-        // 128-bit block ciphers
-        if(item == "AES" || item == "Serpent" || item == "Twofish" || item == "Camellia" || item == "Kuznyechik" || item == "SM4")
-            ui->comboBox_mode->addItems({"GCM", "OCB", "EAX", "SIV", "CCM", "CBC", "CTR", "OFB", "CFB"});
-        // Wide block ciphers
-        if (item == "SHACAL2" || item == "Threefish-512")
-            ui->comboBox_mode->addItems({"OCB", "EAX", "CBC", "CTR", "OFB", "CFB"});
-        // 64-bit block ciphers
-        if (item == "Blowfish" || item == "IDEA" || item == "3DES") {
-            ui->comboBox_mode->addItems({"EAX", "CBC", "CTR", "OFB", "CFB"});
-            ui->textBrowser->append(item + ": This is a 64-bit block cipher. Recommended not to encrypt more than "
-                                           "4GB with this cipher.\n");
-        }
-        if (item == "ChaCha20"){
-            ui->comboBox_mode->addItems({"192-bit", "96-bit", "64-bit"});
-            ui->textBrowser->append("ChaCha20 will be used with Poly1305. "
-                                    "The number of bits refers to the nonce size. 64-bit has a higher proabability of nonce reuse but "
-                                    "a higher file size limit (exabytes). 96-bit and 192-bit nonces have a lower probability of nonce reuse "
-                                    "but a lower file size limit (256GB). ChaCha20 with a 192-bit nonce is XChaCha20.\n");
-        }
-    });
-
-    connect(ui->comboBox_mode, &QComboBox::currentTextChanged, this, [this] (QString item) {
-        if(item == "GCM")
-            ui->textBrowser->append("Max file size in GCM mode is ~64GB before security failure.");
-        if(item == "SIV")
-            ui->textBrowser->append("Warning: SIV mode loads entire file into memory. Ensure you have enough memory available.");
-    });
-    
     connect (ui->comboBox_PBKDF, &QComboBox::currentTextChanged, this, [this]() {
         updateLabels();
         setParams();
@@ -74,6 +41,40 @@ MainWindow::MainWindow(QWidget *parent)
 MainWindow::~MainWindow()
 {
     delete ui;
+}
+
+void MainWindow::updateComboBox(QString item)
+{
+    ui->textBrowser->clear();
+    ui->comboBox_mode->clear();
+    // 128-bit block ciphers
+    if(item == "AES" || item == "Serpent" || item == "Twofish" || item == "Camellia" || item == "Kuznyechik" || item == "SM4"){
+        ui->comboBox_mode->addItems({"GCM", "OCB", "EAX", "SIV", "CCM", "CBC", "CTR", "OFB", "CFB"});
+        ui->textBrowser->append(item + ": 128-bit block cipher. Max file size is 64GiB in GCM mode, 4GB in CCM mode and 4PB (4000TB) in other modes.");
+    }
+    // Wide block ciphers
+    if (item == "SHACAL2" || item == "Threefish-512"){
+        ui->comboBox_mode->addItems({"OCB", "EAX", "CBC", "CTR", "OFB", "CFB"});
+        ui->textBrowser->append(item + ": Wide-block cipher. Max file size of ~1ZiB in CTR mode. No practical max file size in other modes.");
+    }
+    // 64-bit block ciphers
+    if (item == "Blowfish" || item == "IDEA" || item == "3DES") {
+        ui->comboBox_mode->addItems({"EAX", "CBC", "CTR", "OFB", "CFB"});
+        ui->textBrowser->append(item + ": 64-bit block cipher. Recommended not to encrypt more than "
+                                       "4GB with this cipher.\n");
+    }
+    if (item == "ChaCha20"){
+        ui->comboBox_mode->addItems({"192-bit", "96-bit", "64-bit"});
+        ui->textBrowser->append("ChaCha20 will be used with Poly1305. 192-bit is XChaCha20.\n"
+                                "Max file size of ~256GiB with 192-bit and 96-bit nonce.\n"
+                                "Max file size of ~1ZiB (~1,000,000,000TiB) with 64-bit nonce.");
+    }
+}
+
+void MainWindow::displayModeInfo(QString item)
+{
+    if(item == "SIV" || item == "CCM")
+        ui->textBrowser->append("Warning: " + item + " mode loads entire file into memory. Ensure you have enough memory available.");
 }
 
 void MainWindow::updateButtons()

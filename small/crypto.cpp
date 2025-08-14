@@ -69,11 +69,9 @@ void Crypto::run()
     Botan::Cipher_Dir dir;
     std::vector<uint8_t> hmac_tag(32);
 
-    if(mode == "GCM" || mode == "SIV" || mode == "OCB" || mode == "96-bit") iv.resize(12); // OCB changed from 15
-    if(mode == "CCM"){
-        iv.resize(11);
-        mode = "CCM(16,4)";
-    }
+    if(mode == "GCM" || mode == "OCB" || mode == "96-bit") iv.resize(12); // OCB changed from 15
+    if(mode == "SIV") iv.resize(16); // changed from 12
+    if(mode == "CCM"){ iv.resize(11);  mode = "CCM(16,4)";}
     if(mode == "CBC" || mode == "CTR" || mode == "CFB" || mode == "OFB" || mode == "EAX") iv.resize(Botan::BlockCipher::create_or_throw(cipher)->block_size());
     if(mode == "192-bit") iv.resize(24);
     if(mode == "64-bit") iv.resize(8);
@@ -83,9 +81,7 @@ void Crypto::run()
     if(mode == "CTR") algostr = "CTR-BE(" + cipher +",8)";
     if(mode == "OFB") algostr = "OFB(" + cipher + ")";
     std::string_view algostrview = algostr;
-
     bool isAEAD = (mode == "GCM" || mode == "SIV" || mode == "OCB" || mode == "CCM(16,4)" || mode == "EAX" || cipher == "ChaCha20");
-
 
     std::ifstream inputFileHandle(inputFilePath, std::ios::binary);
     std::ofstream outputFileHandle(outputFilePath, std::ios::binary);
@@ -118,7 +114,7 @@ void Crypto::run()
     try {
         if(isAEAD) {
             encAEAD->set_key(key);
-            std::vector<uint8_t> associated_data(header.size()+salt.size()+iv.size());
+            std::vector<uint8_t> associated_data(header.size()+salt.size()+iv.size()); // this may need adjusting
             if(header.size() > 0) associated_data.insert(associated_data.end(), header.begin(), header.end());
             associated_data.insert(associated_data.end(), salt.begin(), salt.end());
             associated_data.insert(associated_data.end(), iv.begin(), iv.end());
@@ -155,22 +151,19 @@ void Crypto::run()
         inputFileHandle.seekg(salt.size() + iv.size() + header.size(), std::ios::beg);
     }
 
-    size_t chunkSize = 1024 * 1024;
-
+    size_t chunkSize = 1024*1024;
     std::vector<uint8_t> buffer(chunkSize);
     size_t totalBytesRead = 0;
     size_t remainder = ciphertext_size % chunkSize;
     size_t numchunks = (ciphertext_size - remainder - chunkSize) / chunkSize; // case when ciphertext is multiple of chunksize?
 
     // Encrypt in chunks if applicable
-
     try{
         if(!(mode == "SIV" || mode == "CCM(16,4)" || ciphertext_size < (1 << 20))){
             for(size_t i = 0; i < numchunks; i++){
                 inputFileHandle.read(reinterpret_cast<char*>(buffer.data()), chunkSize);
                 size_t read = inputFileHandle.gcount();
                 buffer.resize(read);  // resize to actual data read
-
 
                 if(isAEAD) {
                     encAEAD->update(buffer);
@@ -221,7 +214,6 @@ void Crypto::run()
         emit finished();
         return;
     }
-
 
     outputFileHandle.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
 

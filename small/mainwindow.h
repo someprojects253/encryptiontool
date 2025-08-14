@@ -26,6 +26,8 @@ public:
     void getHeader();
     void setParams(QString preset="");
     void updateLabels();
+    void updateComboBox(QString item);
+    void displayModeInfo(QString item);
 
 signals:
     void fileDropped();
